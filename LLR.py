@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from numpy.typing import ArrayLike
+from scipy.stats import ttest_1samp
 
 # Likelihood-Ratio Test
 # LLR = Sum_j=1^m [(x_j^v - mu_j)^2 / 2sigma_j^2 - (x_j^v - mu-hat_j)^2 / 2sigma-hat_j^2 + log sigma_j/sigma-hat_j]
@@ -89,3 +91,53 @@ victim = cpool.iloc[10]
 
 print (LLR(victim, pop, cpool))
 # make result from number so decision
+
+def ttest(victim, pop, pool):
+    ttest = ttest_1samp(LLR(victim, pop, pool), 0)
+    return ttest
+
+def threshold():
+    pvalue_pop = ttest(pop, pop, cpool)[1]
+    pvalue_cpool = ttest(cpool, pop, cpool)[1]
+    a = np.concatenate((pvalue_pop, pvalue_cpool))
+
+    threshold = a.max()+.1
+    newa = np.append(a, threshold)
+    newa = np.unique(newa)
+    return newa
+
+test = threshold()
+print (test)
+
+def ground_truth(pop, pool, threshold):
+    TP = np.sum(pool >= threshold) #all values where pool >= threshold = accept
+    FP = np.sum(pop >= threshold) #all values where pop >= threshold = accept
+    FN = np.sum(pool < threshold) #all values where pool < threshold = reject
+    TN = np.sum(pop < threshold) #all values where pop < threshold = reject
+
+    power =  TP / (TP+FN) #(sensitivity)
+    fpr =  FP / (FP+TN)
+    return power, fpr
+
+power = []
+fpr = []
+pvalue_pop = ttest(pop, pop, cpool)[1]
+pvalue_cpool = ttest(cpool, pop, cpool)[1]
+
+for t in threshold():
+    p, f = ground_truth(pvalue_pop, pvalue_cpool, t)
+    power.append(p)
+    fpr.append(f)
+fpr = np.array(fpr)
+power = np.array(power)
+
+order = np.argsort(fpr)
+fpr = fpr[order]
+power = power[order]
+
+# plots!
+fig, ax = plt.subplots()
+ax.set_xscale("log")
+
+ax.plot(fpr, power, linewidth=2.0)
+plt.show()
