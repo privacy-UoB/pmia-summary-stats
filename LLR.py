@@ -1,8 +1,8 @@
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from numpy.typing import ArrayLike
+from sklearn.metrics import roc_auc_score
 from scipy.stats import ttest_1samp
+from utils import load_dataset, LLR, LLR_ttest, LLR_threshold, ground_truth
 
 # Likelihood-Ratio Test
 # LLR = Sum_j=1^m [(x_j^v - mu_j)^2 / 2sigma_j^2 - (x_j^v - mu-hat_j)^2 / 2sigma-hat_j^2 + log sigma_j/sigma-hat_j]
@@ -10,134 +10,89 @@ from scipy.stats import ttest_1samp
 # mu_j & sigma_j are the average & standard deviation miRNA j in the population
 # mu-hat_j & sigma-hat_j are the average & standard deviation miRNA j in the pool
 
-def load_dataset():
-    df = pd.read_csv('GSE61741_series_matrix.csv', skiprows=52, skipfooter=1, sep='\t', index_col=0)
+# def varying_MiRNA ():
+#     pop = []
+#     rpool = []
+#     cpool = []
+#     num_miRNAs = []
+#     for i in range(10,1000,10):
+#         ret = load_dataset(i)
+#         if ret is None:
+#             break
+#         a,b,c = ret
+#         pop.append(a)
+#         rpool.append(b)
+#         cpool.append(c)
+#         num_miRNAs.append(i)
+#     return pop, rpool, cpool, num_miRNAs
+# pop, rpool, cpool, num_miRNAs = varying_MiRNA()
 
-    df_median = df.median(axis=1)
+auc = []
+num_miRNAs = []
 
-    filter_population = df[df_median > 49]
-    filter_population = filter_population.transpose()
+for i in range(10,1000,10):
+    aucs = []
+    num_miRNAs.append(i)
+    # i=1, num_miRNA = 10
+    for j in range (5):
+        ret = load_dataset(i)
+        if ret is None:
+            del num_miRNAs[-1]
+            break
+        pop, rpool, cpool = ret
+    # pop = [pop(50), pop(100), ..., pop(1000)]
+    # rpool = [rpool(50), rpool(100), ..., rpool(1000)]
+    # cpool = [cpool(50), cpool(100), ..., cpool(1000)]
+    # -> zip[(pop(50),rpool(50),cpool(50)), (pop(100), rpool(100), cpool(100)), ..., (pop(1000), rpool(1000), cpool(1000))]
 
-    # Getting diseases
-    with open('GSE61741_series_matrix.csv', 'rt') as f:
-        lines = f.readlines()
+        pop = pop.drop(columns="diseases")
+        rpool = rpool.drop(columns="diseases")
+        cpool = cpool.drop(columns="diseases")
+        victim = cpool.iloc[10]
 
-    start = '!Sample_characteristics_ch1'
-        
-    for line in lines:
-        if line.startswith(start):
-            diseases = line.strip()
+        print (LLR(victim, pop, cpool).sum())
 
-    diseases = diseases.split('\t')
-    diseases = diseases[1:]
-    diseases = [disease.strip('"') for disease in diseases]
+        test = LLR_threshold(pop, cpool)
+        print (test)
 
+        power = []
+        fpr = []
+        pvalue_pop = LLR_ttest(pop, pop, cpool)[1]
+        pvalue_cpool = LLR_ttest(cpool, pop, cpool)[1]
 
-    filter_population.insert(0, 'diseases', diseases)
-    filter_population = filter_population.sort_values('diseases')
+        for t in LLR_threshold(pop, cpool):
+            p, f = ground_truth(pvalue_pop, pvalue_cpool, t)
+            power.append(p)
+            fpr.append(f)
+        fpr = np.array(fpr)
+        power = np.array(power)
 
-    random_pool = filter_population.sample(65)
+        order = np.argsort(fpr)
+        fpr = fpr[order]
+        power = power[order]
 
-    D1 = "disease: Wilms Tumor"
-    D2 = "disease: lung cancer"
-    D3 = "disease prostate cancer"
-    D4 = "disease: myocardial_infarction"
-    D5 = "disease: chronic obstructive pulmonary disease (COPD)"
-    D6 = "disease sarcoidosis"
-    D7 = "disease ductal adenocarcinoma"
-    D8 = "disease psoriasis"
-    D9 = "disease: pancreatitis"
-    D10 = "disease benign prostate hyperplasia"
-    D11 = "disease melanoma"
-    D12 = "disease: non-ischaemic systolic heart failure"
-    D13 = "disease colon cancer"
-    D14 = "disease: ovarian cancer"
-    D15 = "disease: multiple sclerosis"
-    D16 = "disease: glioma"
-    D17 = "disease renal cancer"
-    D18 = "disease periodontitis"
-    D19 = "disease stomach tumor"
+        y_true = np.concatenate((np.zeros(len(pvalue_pop)), np.ones(len(pvalue_cpool))))
+        y_score = np.concatenate((pvalue_pop, pvalue_cpool))
+        roc = roc_auc_score(y_true, y_score)
 
-    # case_pool = filter_population.mask("diseases" == D1)
-    case_pool = filter_population[filter_population["diseases"] == D1]
+        aucs.append(roc)
+    if len(aucs) >0:
+        auc.append(np.average(aucs))
 
-    return filter_population, random_pool, case_pool
+# plots!
+# fig, ax = plt.subplots()
+# ax.set_xscale("log")
 
+# ax.plot(fpr, power, linewidth=2.0)
+# plt.show()
 
-def LLR(
-        X_victim: ArrayLike, population, pool
-):
-    
-    mu = np.average(population, axis=0)
-    mu_hat = np.average(pool, axis=0)
-
-    sigma = np.std(population, axis=0)
-    sigma_hat = np.std(pool, axis=0)
-
-    population_difference = np.square(X_victim - mu) / 2*sigma**2
-    pool_difference = np.square(X_victim - mu_hat) / 2*sigma_hat**2
-
-    simplified_expression = population_difference - pool_difference + np.log((sigma/sigma_hat))
-
-    return np.sum(simplified_expression)
-# shouldn't need to sum it if you use the axis correct
-
-pop, rpool, cpool = load_dataset()
-
-pop = pop.drop(columns="diseases")
-rpool = rpool.drop(columns="diseases")
-cpool = cpool.drop(columns="diseases")
-victim = cpool.iloc[10]
-
-print (LLR(victim, pop, cpool))
-# make result from number so decision
-
-def ttest(victim, pop, pool):
-    ttest = ttest_1samp(LLR(victim, pop, pool), 0)
-    return ttest
-
-def threshold():
-    pvalue_pop = ttest(pop, pop, cpool)[1]
-    pvalue_cpool = ttest(cpool, pop, cpool)[1]
-    a = np.concatenate((pvalue_pop, pvalue_cpool))
-
-    threshold = a.max()+.1
-    newa = np.append(a, threshold)
-    newa = np.unique(newa)
-    return newa
-
-test = threshold()
-print (test)
-
-def ground_truth(pop, pool, threshold):
-    TP = np.sum(pool >= threshold) #all values where pool >= threshold = accept
-    FP = np.sum(pop >= threshold) #all values where pop >= threshold = accept
-    FN = np.sum(pool < threshold) #all values where pool < threshold = reject
-    TN = np.sum(pop < threshold) #all values where pop < threshold = reject
-
-    power =  TP / (TP+FN) #(sensitivity)
-    fpr =  FP / (FP+TN)
-    return power, fpr
-
-power = []
-fpr = []
-pvalue_pop = ttest(pop, pop, cpool)[1]
-pvalue_cpool = ttest(cpool, pop, cpool)[1]
-
-for t in threshold():
-    p, f = ground_truth(pvalue_pop, pvalue_cpool, t)
-    power.append(p)
-    fpr.append(f)
-fpr = np.array(fpr)
-power = np.array(power)
-
-order = np.argsort(fpr)
-fpr = fpr[order]
-power = power[order]
+print(f'AUC score:{auc}')
 
 # plots!
 fig, ax = plt.subplots()
 ax.set_xscale("log")
 
-ax.plot(fpr, power, linewidth=2.0)
+ax.plot(num_miRNAs, auc, linewidth=2.0)
+plt.xlabel("number MiRNAs")
+plt.ylabel("ROC scores")
 plt.show()

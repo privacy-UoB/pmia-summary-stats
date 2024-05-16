@@ -3,42 +3,24 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
 from utils import load_dataset, L1, L1_ttest, L1_threshold, ground_truth
 
-# L1 Distances Difference
-# D(x_j^v) = |x_j^v - mu_j| - |x_j^v - mu-hat_j|
-# x_j^v is the value of miRNA j for the individual victim in column v
-# mu_j is the average miRNA j in the population
-# mu-hat_j is the average miRNA j in the pool
+# check paper and make sure mirna order is the same for comparison
+# 1st: 50 subsets of n/1049 diff. individuals (35, 65, 124)
+# 4 attacks (L1, LLR with pool&pop stats, LLR without variance stats, LLR without variance stats and using theoretical relations)
+# 2nd: case groups: D19, D17, D10, D7, D3, D1
 
 auc = []
-
-# def varying_MiRNA ():
-#     pop = []
-#     rpool = []
-#     cpool = []
-#     num_miRNAs = []
-#         pop.append(a)
-#         rpool.append(b)
-#         cpool.append(c)
-#         num_miRNAs.append(i)
-#     return pop, rpool, cpool, num_miRNAs
-# pop, rpool, cpool, num_miRNAs = varying_MiRNA()
-
 num_miRNAs = []
 
 for i in range(10,1000,10):
     aucs = []
     num_miRNAs.append(i)
     # i=1, num_miRNA = 10
-    for j in range (5):
-        ret = load_dataset(i)
+    for j in range (50):
+        ret = load_dataset(i, 35, D19)
         if ret is None:
             del num_miRNAs[-1]
             break
         pop, rpool, cpool = ret
-        # pop = [pop(50), pop(100), ..., pop(1000)]
-        # rpool = [rpool(50), rpool(100), ..., rpool(1000)]
-        # cpool = [cpool(50), cpool(100), ..., cpool(1000)]
-        # -> zip[(pop(50),rpool(50),cpool(50)), (pop(100), rpool(100), cpool(100)), ..., (pop(1000), rpool(1000), cpool(1000))]
 
         pop = pop.drop(columns="diseases")
         rpool = rpool.drop(columns="diseases")
@@ -71,12 +53,9 @@ for i in range(10,1000,10):
         y_score = np.concatenate((pvalue_pop, pvalue_cpool))
         roc = roc_auc_score(y_true, y_score)
 
-    # auc.append(roc)
-
         aucs.append(roc)
     if len(aucs) >0:
         auc.append(np.average(aucs))
-        # i=1, num_miRNA = 10, auc = average rocs. Repeat.
 
 # plots!
 # fig, ax = plt.subplots()
@@ -98,25 +77,3 @@ ax.plot(num_miRNAs, auc, linewidth=2.0)
 plt.xlabel("number MiRNAs")
 plt.ylabel("ROC scores")
 plt.show()
-
-# Todo: average the plots over multiple runs (5) so the curve is smoother
-
-# ipython3 in terminal - use when zsh error
-# may 15th network
-
-# t test
-# note different threshold based on victims - check the results and pass/fail rate for t
-# check over all victims, reproduce graphs in paper
-
-
-# git remote add origin git@github.com:privacy-UoB/pmia-summary-stats.git
-# git branch -M main
-# git push -u origin main
-
-# friday 1pm
-# For next time, implement this into the LLR
-# Plot the area under curve for the ROC vs the variances of the number of MiRNAs (so no longer >49 only)
-# Closer to 1, the better the performance of the attack
-# This will be like adding noise
-
-# Tuesday 1-4pm in Bham! Meet at Pascal's office
