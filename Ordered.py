@@ -1,44 +1,61 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 from sklearn.metrics import roc_auc_score
-from utils import load_dataset, L1, L1_ttest, L1_threshold, ground_truth
+from utils import load_dataset, L1, L1_ttest, L1_threshold, ground_truth, D19
 
-# check paper and make sure mirna order is the same for comparison
+# TODO:
+# run for all diseases - check names as these don't match!
+# run for llr
+# change plot to match paper (invert xaxis)
+# check the code to spot the error (esp. num mirna in debugger)
+# commit file!
+# mon 1pm
+
+# Notes:
 # 1st: 50 subsets of n/1049 diff. individuals (35, 65, 124)
 # 4 attacks (L1, LLR with pool&pop stats, LLR without variance stats, LLR without variance stats and using theoretical relations)
 # 2nd: case groups: D19, D17, D10, D7, D3, D1
 
+
+# load dataset
+pop, rpool, cpool = load_dataset(case_sample=D19)
+pop = pop.drop(columns="diseases")
+rpool = rpool.drop(columns="diseases")
+cpool = cpool.drop(columns="diseases")
+
 auc = []
 num_miRNAs = []
+miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", ...]
+num_orders = 50 # number of diff. samples of MiRNAs
 
-for i in range(10,1000,10):
+shuffled_lists = []
+for j in range (num_orders):
+    current_miRNA_list = list(miRNAs)
+    random.shuffle(current_miRNA_list)
+    shuffled_lists.append(current_miRNA_list)
+
+for i in range(1,len(miRNAs),5): # MiRNAs range from 1 to 466 in paper
     aucs = []
     num_miRNAs.append(i)
-    # i=1, num_miRNA = 10
-    for j in range (50):
-        ret = load_dataset(i, 35, D19)
-        if ret is None:
-            del num_miRNAs[-1]
-            break
-        pop, rpool, cpool = ret
 
-        pop = pop.drop(columns="diseases")
-        rpool = rpool.drop(columns="diseases")
-        cpool = cpool.drop(columns="diseases")
-        victim = cpool.iloc[99]
+    for j in range (num_orders):
+        current_shuffled_list = shuffled_lists[j]
+        selected_miRNAs = current_shuffled_list[:i]
 
-        print (L1(victim, pop, cpool).sum())
+        local_pop = pop[selected_miRNAs]
+        local_rpool = rpool[selected_miRNAs]
+        local_cpool = cpool[selected_miRNAs]
         
-
-        test = L1_threshold(pop, cpool)
-        print (test)
+        # print (L1(victim, local_pop, local_cpool).sum())
+        # test = L1_threshold(local_pop, local_cpool)
 
         power = []
         fpr = []
-        pvalue_pop = L1_ttest(pop, pop, cpool)[1]
-        pvalue_cpool = L1_ttest(cpool, pop, cpool)[1]
+        pvalue_pop = L1_ttest(local_pop, local_pop, local_cpool)[1]
+        pvalue_cpool = L1_ttest(local_cpool, local_pop, local_cpool)[1]
 
-        for t in L1_threshold(pop, cpool):
+        for t in L1_threshold(local_pop, local_cpool):
             p, f = ground_truth(pvalue_pop, pvalue_cpool, t)
             power.append(p)
             fpr.append(f)

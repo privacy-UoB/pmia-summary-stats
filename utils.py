@@ -3,6 +3,26 @@ import pandas as pd
 from numpy.typing import ArrayLike
 from scipy.stats import ttest_1samp
 
+D1 = "disease: Wilms Tumor"
+D2 = "disease: lung cancer"
+D3 = "disease prostate cancer"
+D4 = "disease: myocardial_infarction"
+D5 = "disease: chronic obstructive pulmonary disease (COPD)"
+D6 = "disease sarcoidosis"
+D7 = "disease ductal adenocarcinoma"
+D8 = "disease psoriasis"
+D9 = "disease: pancreatitis"
+D10 = "disease benign prostate hyperplasia"
+D11 = "disease melanoma"
+D12 = "disease: non-ischaemic systolic heart failure"
+D13 = "disease colon cancer"
+D14 = "disease: ovarian cancer"
+D15 = "disease: multiple sclerosis"
+D16 = "disease: glioma"
+D17 = "disease renal cancer"
+D18 = "disease periodontitis"
+D19 = "disease: tumor of stomach"
+
 def load_dataset(MiRNA_filter=None, random_sample=None, case_sample=None):
     df = pd.read_csv('GSE61741_series_matrix.csv', skiprows=52, skipfooter=1, sep='\t', index_col=0)
 
@@ -36,28 +56,8 @@ def load_dataset(MiRNA_filter=None, random_sample=None, case_sample=None):
 
     random_pool = filter_population.sample(65 if random_sample is None else random_sample)
 
-    D1 = "disease: Wilms Tumor"
-    D2 = "disease: lung cancer"
-    D3 = "disease prostate cancer"
-    D4 = "disease: myocardial_infarction"
-    D5 = "disease: chronic obstructive pulmonary disease (COPD)"
-    D6 = "disease sarcoidosis"
-    D7 = "disease ductal adenocarcinoma"
-    D8 = "disease psoriasis"
-    D9 = "disease: pancreatitis"
-    D10 = "disease benign prostate hyperplasia"
-    D11 = "disease melanoma"
-    D12 = "disease: non-ischaemic systolic heart failure"
-    D13 = "disease colon cancer"
-    D14 = "disease: ovarian cancer"
-    D15 = "disease: multiple sclerosis"
-    D16 = "disease: glioma"
-    D17 = "disease renal cancer"
-    D18 = "disease periodontitis"
-    D19 = "disease stomach tumor"
-
-    D1 = (D1 if case_sample is None else case_sample.strip('"'))
-    case_pool = filter_population[filter_population["diseases"] == D1]
+    D = (D1 if case_sample is None else case_sample)
+    case_pool = filter_population[filter_population["diseases"] == D]
 
     return filter_population, random_pool, case_pool
 
