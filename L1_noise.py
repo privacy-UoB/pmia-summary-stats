@@ -1,63 +1,123 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
+from utils import ground_truth, load_dataset, L1_threshold, L1_ttest, LLR, D3
 
-from utils import ground_truth, load_dataset, L1_threshold, L1_ttest
-
-noise_scales = [0.1, 1, 2, 5, 10, 20, 30, 40, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750]
-
-pop, rpool, cpool = load_dataset()
+pop, rpool, cpool = load_dataset(case_sample=D3)
 pop = pop.drop(columns="diseases")
 rpool = rpool.drop(columns="diseases")
 cpool = cpool.drop(columns="diseases")
+pool = cpool # make pool configurable
 
-# Make pool configurable
-pool = cpool
-auc = []
+mu = np.average(pop)
+mu_j = np.average(pop, axis=0)
+mu_hat = np.average(pool)
+mu_hat_j = np.average(pool, axis=0)
+print(mu, mu_j, mu_hat, mu_hat_j)
 
-for scale in noise_scales:
-    aucs = []
-    for j in range (5):
-        pool_noise = np.random.normal(0, scale, pool.shape)
-        pop_noise = np.random.normal(0, scale, pop.shape)
+sigma = np.std(pop)
+sigma_j = np.std(pop, axis=0)
+sigma_hat = np.std(pool)
+sigma_hat_j = np.std(pool, axis=0)
+print(sigma, sigma_j, sigma_hat, sigma_hat_j)
+
+x = pop.sample(20, axis=1)
+print("pop: max", np.max(x, axis=0), 
+      "min", np.min(x, axis=0), 
+      "mean", np.average(x, axis=0), 
+      "deviation", np.std(x, axis=0))
+
+y = pool.sample(20, axis=1)
+print("pool: max", np.max(y, axis=0), 
+      "min", np.min(y, axis=0), 
+      "mean", np.average(y, axis=0), 
+      "deviation", np.std(y, axis=0))
+
+plt.hist(x, bins=40)
+plt.show()
+plt.hist(y, bins=40)
+plt.show()
+
+
+auc_L1 = []
+auc_LLR = []
+# fractions of standard deviation applied to the dataset
+multiplier = [0, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+
+for m in multiplier:
+    aucs_L1 = []
+    aucs_LLR = []
+    for j in range (25):
+        # pop_noise = np.random.normal(0, m * 1000, pop.shape)
+        # pool_noise = np.random.normal(0, m * 1000, pool.shape)
+        pop_noise = np.random.normal(0, m * sigma_j, pop.shape)
+        pool_noise = np.random.normal(0, m * sigma_j, pool.shape)
+        # still need to double check random.normal when inputting array of std dev
+
+        noised_pop = pop + pop_noise
+        nonneg_pop_noise = np.clip(noised_pop, 0, None)
 
         noised_pool = pool + pool_noise
-        noised_pop = pop + pop_noise
+        nonneg_pool_noise = np.clip(noised_pool, 0, None)
+
+        pvalue_pop_L1 = L1_ttest(noised_pop, pop, pool)
+        pvalue_pool_L1 = L1_ttest(noised_pool, pop, pool)
+
+        pvalue_pop_LLR = LLR(noised_pop, pop, pool)
+        pvalue_pool_LLR = LLR(noised_pool, pop, pool)
+
+        # print(L1_threshold(pop, pool, noised_pop, noised_pool))
+
+        # power = []
+        # fpr = []
+        # for t in L1_threshold(pop, pool, noised_pop, noised_pool):
+        #     p, f = ground_truth(pvalue_pop, pvalue_cpool, t)
+        #     power.append(p)
+        #     fpr.append(f)
+        # fpr = np.array(fpr)
+        # power = np.array(power)
+
+        # order = np.argsort(fpr)
+        # fpr = fpr[order]
+        # power = power[order]
+
+        y_true_L1 = np.concatenate((np.zeros(len(pvalue_pop_L1)), np.ones(len(pvalue_pool_L1))))
+        y_score_L1 = np.concatenate((pvalue_pop_L1, pvalue_pool_L1))
+        roc = roc_auc_score(y_true_L1, y_score_L1)
+
+        aucs_L1.append(roc)
+
+        y_true_LLR = np.concatenate((np.zeros(len(pvalue_pop_LLR)), np.ones(len(pvalue_pool_LLR))))
+        y_score_LLR = np.concatenate((pvalue_pop_LLR, pvalue_pool_LLR))
+        roc_LLR = roc_auc_score(y_true_LLR, y_score_LLR)
         
-        test = L1_threshold(pop, pool, noised_pop, noised_pool)
-        print (test)
+        aucs_LLR.append(roc_LLR)
 
-        power = []
-        fpr = []
-        pvalue_pop = L1_ttest(noised_pop, pop, pool)[1]
-        pvalue_cpool = L1_ttest(noised_pool, pop, pool)[1]
+    if len(aucs_L1) >0:
+        auc_L1.append(np.average(aucs_L1))
 
-        for t in L1_threshold(pop, pool, noised_pop, noised_pool):
-            p, f = ground_truth(pvalue_pop, pvalue_cpool, t)
-            power.append(p)
-            fpr.append(f)
-        fpr = np.array(fpr)
-        power = np.array(power)
+    if len(aucs_LLR) >0:
+        auc_LLR.append(np.average(aucs_LLR))
 
-        order = np.argsort(fpr)
-        fpr = fpr[order]
-        power = power[order]
 
-        y_true = np.concatenate((np.zeros(len(pvalue_pop)), np.ones(len(pvalue_cpool))))
-        y_score = np.concatenate((pvalue_pop, pvalue_cpool))
-        roc = roc_auc_score(y_true, y_score)
-
-        aucs.append(roc)
-    if len(aucs) >0:
-        auc.append(np.average(aucs))
-
-print(f'AUC score:{auc}')
+# print(f'AUC score:{auc_L1}')
+# print(f'AUC score:{auc_LLR}')
 
 # plots!
 fig, ax = plt.subplots()
-ax.set_xscale("log")
+# ax.set_xscale("log")
 
-ax.plot(noise_scales, auc, linewidth=2.0)
+# ax.plot(noise_scales_pop, auc_L1, "-b", linewidth=2.0, label="L1")
+# ax.plot(noise_scales_pool, auc_LLR, "-r", linewidth=2.0, label="LLR")
+ax.plot(multiplier, auc_L1, "-b", linewidth=2.0, label="L1")
+ax.plot(multiplier, auc_LLR, "-r", linewidth=2.0, label="LLR")
 plt.xlabel("noise scale")
-plt.ylabel("ROC scores")
+plt.ylabel("AUC scores")
+plt.legend(loc="upper right")
 plt.show()
+
+
+# TODO
+# cross ordered dataset with noisy dataset?
+# check inference of patients when miRNA samples are taken a year apart

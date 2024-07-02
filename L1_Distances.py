@@ -3,33 +3,13 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
 from utils import load_dataset, L1, L1_ttest, L1_threshold, ground_truth
 
-# L1 Distances Difference
-# D(x_j^v) = |x_j^v - mu_j| - |x_j^v - mu-hat_j|
-# x_j^v is the value of miRNA j for the individual victim in column v
-# mu_j is the average miRNA j in the population
-# mu-hat_j is the average miRNA j in the pool
-
 auc = []
-
-# def varying_MiRNA ():
-#     pop = []
-#     rpool = []
-#     cpool = []
-#     num_miRNAs = []
-#         pop.append(a)
-#         rpool.append(b)
-#         cpool.append(c)
-#         num_miRNAs.append(i)
-#     return pop, rpool, cpool, num_miRNAs
-# pop, rpool, cpool, num_miRNAs = varying_MiRNA()
-
 num_miRNAs = []
 
-for i in range(10,1000,10):
+for i in range(10,470,10):
     aucs = []
     num_miRNAs.append(i)
-    # i=1, num_miRNA = 10
-    for j in range (5):
+    for j in range (5): # 5 is arbitrary number of runs to average the auc curve
         ret = load_dataset(i)
         if ret is None:
             del num_miRNAs[-1]
@@ -43,80 +23,53 @@ for i in range(10,1000,10):
         pop = pop.drop(columns="diseases")
         rpool = rpool.drop(columns="diseases")
         cpool = cpool.drop(columns="diseases")
-        victim = cpool.iloc[99]
+        pool = cpool # make pool configurable
+        victim = pool.iloc[99]
 
-        print (L1(victim, pop, cpool).sum())
-        
+        # print(L1(victim, pop, pool).sum())
+        # print(L1_threshold(pop, pool))
 
-        test = L1_threshold(pop, cpool)
-        print (test)
+        pvalue_pop = L1_ttest(pop, pop, pool)
+        pvalue_pool = L1_ttest(pool, pop, pool)
 
-        power = []
-        fpr = []
-        pvalue_pop = L1_ttest(pop, pop, cpool)[1]
-        pvalue_cpool = L1_ttest(cpool, pop, cpool)[1]
+        # power = []
+        # fpr = []
+        # for t in L1_threshold(pop, cpool):
+        #     p, f = ground_truth(pvalue_pop, pvalue_cpool, t)
+        #     power.append(p)
+        #     fpr.append(f)
+        # fpr = np.array(fpr)
+        # power = np.array(power)
 
-        for t in L1_threshold(pop, cpool):
-            p, f = ground_truth(pvalue_pop, pvalue_cpool, t)
-            power.append(p)
-            fpr.append(f)
-        fpr = np.array(fpr)
-        power = np.array(power)
+        # order = np.argsort(fpr)
+        # fpr = fpr[order]
+        # power = power[order]
 
-        order = np.argsort(fpr)
-        fpr = fpr[order]
-        power = power[order]
-
-        y_true = np.concatenate((np.zeros(len(pvalue_pop)), np.ones(len(pvalue_cpool))))
-        y_score = np.concatenate((pvalue_pop, pvalue_cpool))
+        y_true = np.concatenate((np.zeros(len(pvalue_pop)), np.ones(len(pvalue_pool))))
+        y_score = np.concatenate((pvalue_pop, pvalue_pool))
         roc = roc_auc_score(y_true, y_score)
 
-    # auc.append(roc)
-
-        aucs.append(roc)
+        aucs.append(roc) # auc = average rocs
     if len(aucs) >0:
         auc.append(np.average(aucs))
-        # i=1, num_miRNA = 10, auc = average rocs. Repeat.
 
 # plots!
 # fig, ax = plt.subplots()
 # ax.set_xscale("log")
-
+        
 # ax.plot(fpr, power, linewidth=2.0)
 # plt.xlabel("fpr")
 # plt.ylabel("power")
-
 # plt.show()
 
-print(f'AUC score:{auc}')
+
+# print(f'AUC score:{auc}')
 
 # plots!
 fig, ax = plt.subplots()
-ax.set_xscale("log")
+# ax.set_xscale("log")
 
 ax.plot(num_miRNAs, auc, linewidth=2.0)
 plt.xlabel("number MiRNAs")
 plt.ylabel("ROC scores")
 plt.show()
-
-# Todo: average the plots over multiple runs (5) so the curve is smoother
-
-# ipython3 in terminal - use when zsh error
-# may 15th network
-
-# t test
-# note different threshold based on victims - check the results and pass/fail rate for t
-# check over all victims, reproduce graphs in paper
-
-
-# git remote add origin git@github.com:privacy-UoB/pmia-summary-stats.git
-# git branch -M main
-# git push -u origin main
-
-# friday 1pm
-# For next time, implement this into the LLR
-# Plot the area under curve for the ROC vs the variances of the number of MiRNAs (so no longer >49 only)
-# Closer to 1, the better the performance of the attack
-# This will be like adding noise
-
-# Tuesday 1-4pm in Bham! Meet at Pascal's office
