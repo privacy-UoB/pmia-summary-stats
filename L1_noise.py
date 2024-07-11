@@ -17,7 +17,7 @@ mu_hat_j = np.average(pool, axis=0)
 print(mu, mu_j, mu_hat, mu_hat_j)
 
 sigma = np.std(pop)
-sigma_j = np.std(pop, axis=0)
+sigma_j = np.std(pop, axis=0) #this is doing it over all the columns (miRNAs)
 sigma_hat = np.std(pool)
 sigma_hat_j = np.std(pool, axis=0)
 print(sigma, sigma_j, sigma_hat, sigma_hat_j)
@@ -35,20 +35,32 @@ print("pool: max", np.max(y, axis=0),
       "deviation", np.std(y, axis=0))
 
 plt.hist(x, bins=40)
+plt.xlabel("sample of 20 miRNAs from population")
+plt.ylabel("count of miRNAs within 40 different range values")
 plt.show()
+
 plt.hist(y, bins=40)
+plt.xlabel("sample of 20 miRNAs from pool")
+plt.ylabel("count of miRNAs within 40 different range values")
+plt.show()
+
+# hist over all sigma j for all mirna
+plt.hist(sigma_j, bins=100)
+plt.xlabel("standard deviation of miRNAs")
+plt.ylabel("number of the 466 miRNAs in each bar")
 plt.show()
 
 
 auc_L1 = []
 auc_LLR = []
 # fractions of standard deviation applied to the dataset
-multiplier = [0, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+# multiplier = [0, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+multiplier = np.arange(0, 1, 0.01)
 
 for m in multiplier:
     aucs_L1 = []
     aucs_LLR = []
-    for j in range (25):
+    for j in range (40):
         # pop_noise = np.random.normal(0, m * 1000, pop.shape)
         # pool_noise = np.random.normal(0, m * 1000, pool.shape)
         pop_noise = np.random.normal(0, m * sigma_j, pop.shape)
@@ -116,8 +128,3 @@ plt.xlabel("noise scale")
 plt.ylabel("AUC scores")
 plt.legend(loc="upper right")
 plt.show()
-
-
-# TODO
-# cross ordered dataset with noisy dataset?
-# check inference of patients when miRNA samples are taken a year apart

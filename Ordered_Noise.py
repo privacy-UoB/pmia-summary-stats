@@ -1,0 +1,133 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+from sklearn.metrics import roc_auc_score
+from utils import load_dataset, LLR, L1, L1_ttest, L1_threshold, LLR_threshold, ground_truth, D3
+
+
+# paper: the demonstrated graphs showing roc curves
+    # 1st: 50 subsets of n/1049 different individuals (n = 35, 65, 124)
+    # 2nd: 6 case groups D19, D17, D10, D7, D3, D1
+
+# load dataset
+pop, rpool, cpool = load_dataset(case_sample=D3)
+pop = pop.drop(columns="diseases")
+rpool = rpool.drop(columns="diseases")
+cpool = cpool.drop(columns="diseases")
+pool = cpool # make pool configurable
+
+sigma_j = np.std(pop, axis=0) # this is doing it over all the columns (miRNAs)
+multiplier = [0, 0.25, 0.5, 0.75, 1] # fractions of standard deviation applied to the dataset
+
+noise_fraction_L1 = []
+noise_fraction_LLR = []
+miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", ...]
+num_orders = 15 # number of different samples of MiRNAs
+
+shuffled_lists = []
+random_seed = []
+for j in range (num_orders):
+    current_miRNA_list = list(miRNAs)
+    random.shuffle(current_miRNA_list)
+    shuffled_lists.append(current_miRNA_list)
+
+    # same noise added for each m to each num_orders shuffling of miRNAs
+    random_number = random.randint(1000,9999)
+    random_seed.append(random_number)
+
+    # 11th july
+    # more optimal to generate numorder noisy lists here not seeds
+    # either just one lot of noise or add it to numorder lots of the pop and pool
+    # another for loop for the m lots, diff. distributions (matrix of m rows numorder cols)
+    # do extra todo task 2
+    # write meeting summary for Mark
+
+
+for m in multiplier:
+    auc_L1 = []
+    auc_LLR = []
+    num_miRNAs = []
+
+    # generate the noisy population - a list per num orders (save doing it over i)
+    # create pop & pool
+    # creating the noise to add to each num_orders shuffling of miRNAs
+    
+
+    for i in range(2,len(miRNAs),2): # MiRNAs range from 1 to 466 in paper
+        aucs_L1 = []
+        aucs_LLR = []
+        num_miRNAs.append(i)
+
+        for j in range (num_orders):
+            current_random_seed = random_seed[j]
+            np.random.seed(current_random_seed)
+
+            current_shuffled_list = shuffled_lists[j]
+            selected_miRNAs = current_shuffled_list[:i]
+
+            # broadcast the deviation over all i miRNAs to the [n x i] pop/pool shape
+            pop_noise = np.random.normal(0, m * sigma_j, pop.shape)
+            pool_noise = np.random.normal(0, m * sigma_j, pool.shape)
+
+
+            noised_pop = pop + pop_noise
+            local_noised_pop = noised_pop[selected_miRNAs]
+            nonneg_local_pop_noise = np.clip(local_noised_pop, 0, None)
+
+            noised_pool = pool + pool_noise
+            local_noised_pool = noised_pool[selected_miRNAs]
+            nonneg_local_pool_noise = np.clip(local_noised_pool, 0, None)
+
+
+            local_pop = pop[selected_miRNAs]
+            local_pool = pool[selected_miRNAs]
+
+            pvalue_pop_L1 = L1_ttest(local_noised_pop, local_pop, local_pool)
+            pvalue_pool_L1 = L1_ttest(local_noised_pool, local_pop, local_pool)
+
+            pvalue_pop_LLR = LLR(local_noised_pop, local_pop, local_pool)
+            pvalue_pool_LLR = LLR(local_noised_pool, local_pop, local_pool)
+
+
+            y_true_L1 = np.concatenate((np.zeros(len(pvalue_pop_L1)), np.ones(len(pvalue_pool_L1))))
+            y_score_L1 = np.concatenate((pvalue_pop_L1, pvalue_pool_L1))
+            roc_L1 = roc_auc_score(y_true_L1, y_score_L1)
+
+            aucs_L1.append(roc_L1)
+
+            y_true_LLR = np.concatenate((np.zeros(len(pvalue_pop_LLR)), np.ones(len(pvalue_pool_LLR))))
+            y_score_LLR = np.concatenate((pvalue_pop_LLR, pvalue_pool_LLR))
+            roc_LLR = roc_auc_score(y_true_LLR, y_score_LLR)
+            
+            aucs_LLR.append(roc_LLR)
+
+        if len(aucs_L1) >0:
+            auc_L1.append(np.average(aucs_L1))
+
+        if len(aucs_LLR) >0:
+            auc_LLR.append(np.average(aucs_LLR))
+
+    noise_fraction_L1.append(auc_L1)
+    noise_fraction_LLR.append(auc_LLR)
+
+
+# print(f'AUC score:{auc_L1}')
+# print(f'AUC score:{auc_LLR}')
+
+# plots!
+fig, ax = plt.subplots()
+
+for l in range(len(multiplier)):
+    # ax.plot(num_miRNAs, noise_fraction_L1[l], linewidth=2.0, label=f"L1 {l}")
+    ax.plot(num_miRNAs, noise_fraction_LLR[l], linewidth=2.0, label=f"LLR {l}")
+ax.invert_xaxis()
+ax.set_ylim([0.5,1]) # enables comparable auc scores between L1 and LLR
+plt.xlabel("number MiRNAs")
+plt.ylabel("AUC scores")
+plt.legend(loc="upper right")
+plt.show() 
+
+# TODO 3rd July
+# generate the noisy population - a list per num orders (save doing it over i)
+# check inference of patients when miRNA samples are taken a year apart
+# why is that curve so funny looking??
