@@ -73,17 +73,17 @@ for m in multiplier:
         noised_pool = pool + pool_noise
         nonneg_pool_noise = np.clip(noised_pool, 0, None)
 
-        pvalue_pop_L1 = L1_ttest(noised_pop, pop, pool)
-        pvalue_pool_L1 = L1_ttest(noised_pool, pop, pool)
+        pvalue_pop_L1 = L1_ttest(nonneg_pop_noise, pop, pool)
+        pvalue_pool_L1 = L1_ttest(nonneg_pool_noise, pop, pool)
 
-        pvalue_pop_LLR = LLR(noised_pop, pop, pool)
-        pvalue_pool_LLR = LLR(noised_pool, pop, pool)
+        pvalue_pop_LLR = LLR(nonneg_pop_noise, pop, pool)
+        pvalue_pool_LLR = LLR(nonneg_pool_noise, pop, pool)
 
-        # print(L1_threshold(pop, pool, noised_pop, noised_pool))
+        # print(L1_threshold(pop, pool, nonneg_pop_noise, nonneg_pool_noise))
 
         # power = []
         # fpr = []
-        # for t in L1_threshold(pop, pool, noised_pop, noised_pool):
+        # for t in L1_threshold(pop, pool, nonneg_pop_noise, nonneg_pool_noise):
         #     p, f = ground_truth(pvalue_pop, pvalue_cpool, t)
         #     power.append(p)
         #     fpr.append(f)
