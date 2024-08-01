@@ -67,6 +67,62 @@ def load_dataset(MiRNA_filter=None, random_sample=None, case_sample=None):
 
     return filter_population, random_pool, case_pool
 
+def load_timestamp_dataset(MiRNA_filter=None):
+    df = pd.read_csv('GSE68951_series_matrix.txt', skiprows=58, skipfooter=1, sep='\t', index_col=0)
+    # columns are 215 individuals, rows are 1026 miRNAs
+
+    population = df.transpose()
+
+    # Getting diseases
+    with open('GSE68951_series_matrix.txt', 'rt') as f:
+        lines = f.readlines()
+
+    # Sorting disease: lung cancer & disease: non-cancerous lung disease (control)
+    disease = lines[35]
+    disease = disease.split("\t")
+    disease = disease[1:]
+    disease = [diseases.strip('\n, ,"') for diseases in disease]
+
+    timepoint = lines[37]
+    timepoint = timepoint.split("\t")
+    timepoint = timepoint[1:]
+    timepoint = [timepoints.strip('\n, ,"') for timepoints in timepoint]
+
+    population.insert(0, 'timepoint', timepoint)
+
+    if MiRNA_filter is not None:
+        rows, columns = population.shape
+        # print(columns)
+        if MiRNA_filter > columns:
+            return None
+        population = population.sample(MiRNA_filter, axis=1)
+
+    population.insert(0, 'disease', disease)
+    population = population.sort_values('disease')
+
+    # timepoint 1 is equal to the case pool, timepoints 2-8 simulate increasing levels of noise
+    timepoint1 = population[population["timepoint"] == "timepoint: 1"]
+    timepoint2 = population[population["timepoint"] == "timepoint: 2"]
+    timepoint3 = population[population["timepoint"] == "timepoint: 3"]
+    timepoint4 = population[population["timepoint"] == "timepoint: 4"]
+    timepoint5 = population[population["timepoint"] == "timepoint: 5"]
+    timepoint6 = population[population["timepoint"] == "timepoint: 6"]
+    timepoint7 = population[population["timepoint"] == "timepoint: 7"]
+    timepoint8 = population[population["timepoint"] == "timepoint: 8"]
+    # population[population[“disease”] == “abc” and population[“timestamp”] == 0]
+    # use this to remove control too!!
+
+    pop = population[population["disease"] == "disease: non-cancerous lung disease (control)"]
+    timepoint1_nocontrol = timepoint1[timepoint1["disease"] == "disease: lung cancer"]
+
+    pop = pd.concat([pop, timepoint1_nocontrol])
+    case_pool = timepoint1_nocontrol
+    # case_pool = population[population["disease"] == "disease: lung cancer"]
+
+    print("pop shape", pop.shape, "cpool shape", case_pool.shape)
+
+    return pop, case_pool, timepoint1, timepoint2, timepoint3, timepoint4, timepoint5, timepoint6, timepoint7, timepoint8
+
 def L1(
         X_victim: ArrayLike, population, pool
 ):

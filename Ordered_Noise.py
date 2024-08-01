@@ -124,13 +124,3 @@ plt.xlabel("number MiRNAs")
 plt.ylabel("AUC scores")
 plt.legend(loc="upper right")
 plt.show() 
-
-# TODO 3rd July
-# generate the noisy population - a list per num orders (save doing it over i)
-# check inference of patients when miRNA samples are taken a year apart
-# TODO 11th July
-# more optimal to generate numorder noisy lists here not seeds
-# either just one lot of noise or add it to numorder lots of the pop and pool
-# another for loop for the m lots, diff. distributions (matrix of m rows numorder cols)
-# do extra todo task 2
-# write meeting summary for Mark
