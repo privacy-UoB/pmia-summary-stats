@@ -1,8 +1,11 @@
 import numpy as np
 import pandas as pd
+import random
 from numpy.typing import ArrayLike
 from scipy.stats import ttest_1samp
+from sklearn.model_selection import ShuffleSplit
 
+# listing all 19 case pools for GSE61741 dataset
 D1 = "disease: Wilms Tumor"
 D2 = "disease: lung cancer"
 D3 = "disease: prostate cancer"
@@ -24,14 +27,16 @@ D18 = "disease: Periodontitis"
 D19 = "disease: tumor of stomach"
 
 def load_dataset(MiRNA_filter=None, random_sample=None, case_sample=None):
-    df = pd.read_csv('GSE61741_series_matrix.csv', skiprows=52, skipfooter=1, sep='\t', index_col=0)
-    # columns are individuals, rows are miRNAs
 
+    # columns are individuals, rows are miRNAs
+    df = pd.read_csv('GSE61741_series_matrix.csv', skiprows=52, skipfooter=1, sep='\t', index_col=0)
+
+    # common to filter out miRNAs with median below 50
     df_median = df.median(axis=1)
     filter_population = df[df_median >= 50]
     filter_population = filter_population.transpose()
 
-    # Getting diseases
+    # getting diseases
     with open('GSE61741_series_matrix.csv', 'rt') as f:
         lines = f.readlines()
 
@@ -45,83 +50,207 @@ def load_dataset(MiRNA_filter=None, random_sample=None, case_sample=None):
     diseases = diseases[1:]
     diseases = [disease.strip('"') for disease in diseases]
 
+    # reducing number of columns (miRNAs) according to the passed argument 'MiRNA_filer'
     if MiRNA_filter is not None:
         rows, columns = filter_population.shape
-        # print(columns)
+
         if MiRNA_filter > columns:
             return None
 
         filter_population = filter_population.sample(MiRNA_filter, axis=1)
+
+    # insert column label for diseases
     filter_population.insert(0, 'diseases', diseases)
     filter_population = filter_population.sort_values('diseases')
 
+    # reduce number of rows (individuals) according to the passed argument 'random_sample'
     a = 65 if random_sample is None else random_sample
-    random_pool = filter_population.sample(a)
-    assert random_pool.shape == (a, 466 if MiRNA_filter is None else (MiRNA_filter+1))
-    # miRNA_Filter+1 because varying miRNA functions drop column: "disease" after calling function
 
+    randomshuffle = ShuffleSplit(n_splits=1, test_size=a)
+    (train, test) = next(randomshuffle.split(filter_population))
+    filter_population_rpool = filter_population.iloc[train] # population all individuals not in random pool
+    random_pool = filter_population.iloc[test] # random pool of a individuals
+    assert random_pool.shape == (a, 466 if MiRNA_filter is None else (MiRNA_filter+1)) # miRNA_Filter+1 because varying miRNA functions drop column: "disease" after calling function
+
+    # reduce number of rows (individuals) according to the passed argument 'case_sample'
     D = (D1 if case_sample is None else case_sample)
     case_pool = filter_population[filter_population["diseases"] == D]
+    filter_population_cpool = filter_population[filter_population["diseases"] != D]
 
-    print("pop shape", filter_population.shape, "rpool shape", random_pool.shape, "cpool shape", case_pool.shape)
+    print("pop shape minus rpool", filter_population_rpool.shape,
+          "pop shape minus cpool", filter_population_cpool.shape,
+          "rpool shape", random_pool.shape,
+          "cpool shape", case_pool.shape)
 
-    return filter_population, random_pool, case_pool
+    return filter_population_rpool, filter_population_cpool, random_pool, case_pool
 
 def load_timestamp_dataset(MiRNA_filter=None):
-    df = pd.read_csv('GSE68951_series_matrix.txt', skiprows=58, skipfooter=1, sep='\t', index_col=0)
+
     # columns are 215 individuals, rows are 1026 miRNAs
+    df = pd.read_csv('GSE68951_series_matrix.txt', skiprows=58, skipfooter=1, sep='\t', index_col=0)
 
     population = df.transpose()
 
-    # Getting diseases
     with open('GSE68951_series_matrix.txt', 'rt') as f:
         lines = f.readlines()
 
-    # Sorting disease: lung cancer & disease: non-cancerous lung disease (control)
+    # getting 'disease: lung cancer' & 'disease: non-cancerous lung disease (control)'
     disease = lines[35]
     disease = disease.split("\t")
     disease = disease[1:]
     disease = [diseases.strip('\n, ,"') for diseases in disease]
 
+    # getting patients
+    patient_id = lines[36]
+    patient_id = patient_id.split("\t")
+    patient_id = patient_id[1:]
+    patient_id = [patient_ids.strip('\n, ,"') for patient_ids in patient_id]
+
+    # list all patient ids included
+    unique_patient_id = list(set(patient_id))
+    unique_patient_id_nocontrol = [patient for patient in unique_patient_id if patient != "patient id: ZZ_control"]
+    sample_patient = random.sample(unique_patient_id_nocontrol, 1)
+    unique_patient_id_nocontrol = np.array(unique_patient_id_nocontrol)
+
+    # getting timepoints (diseases have timepoints 1-8, control has timepoints 1-12)
     timepoint = lines[37]
     timepoint = timepoint.split("\t")
     timepoint = timepoint[1:]
     timepoint = [timepoints.strip('\n, ,"') for timepoints in timepoint]
 
+    # insert column label for timepoints
     population.insert(0, 'timepoint', timepoint)
 
+    # reducing number of columns (miRNAs) according to the passed argument 'MiRNA_filer'
     if MiRNA_filter is not None:
         rows, columns = population.shape
-        # print(columns)
+
         if MiRNA_filter > columns:
             return None
         population = population.sample(MiRNA_filter, axis=1)
 
+    # insert column label for diseases
     population.insert(0, 'disease', disease)
-    population = population.sort_values('disease')
 
-    # timepoint 1 is equal to the case pool, timepoints 2-8 simulate increasing levels of noise
-    timepoint1 = population[population["timepoint"] == "timepoint: 1"]
-    timepoint2 = population[population["timepoint"] == "timepoint: 2"]
-    timepoint3 = population[population["timepoint"] == "timepoint: 3"]
-    timepoint4 = population[population["timepoint"] == "timepoint: 4"]
-    timepoint5 = population[population["timepoint"] == "timepoint: 5"]
-    timepoint6 = population[population["timepoint"] == "timepoint: 6"]
-    timepoint7 = population[population["timepoint"] == "timepoint: 7"]
-    timepoint8 = population[population["timepoint"] == "timepoint: 8"]
-    # population[population[“disease”] == “abc” and population[“timestamp”] == 0]
-    # use this to remove control too!!
+    # insert column label for patient id
+    population.insert(0, 'patient_id', patient_id)
 
-    pop = population[population["disease"] == "disease: non-cancerous lung disease (control)"]
-    timepoint1_nocontrol = timepoint1[timepoint1["disease"] == "disease: lung cancer"]
+    # filtering data into the 8 timepoints for diseases only
+    """
+    timepoint 1 (or any other chosen timepoint) is similar to the original pool
+    timepoints 2-8 simulate increasing levels of noise as the miRNA readings differ over time
+    """
+    timepoint_i = []
+    for i in range(8):
+        t = population[(population["timepoint"] == f"timepoint: {(i+1)}") & (population["disease"] == "disease: lung cancer")]
+        timepoint_i.append(t)
 
-    pop = pd.concat([pop, timepoint1_nocontrol])
-    case_pool = timepoint1_nocontrol
-    # case_pool = population[population["disease"] == "disease: lung cancer"]
+    # filter dataset via patient ids into distinct population and pool
+    randomshuffle = ShuffleSplit(n_splits=1, test_size=18) # (test, train) = function -> matches ML train/test splitting order
+    (pool_patients, pop_patients) = next(randomshuffle.split(unique_patient_id_nocontrol))
+    pop_patients = unique_patient_id_nocontrol[pop_patients]
+    pool_patients = unique_patient_id_nocontrol[pool_patients]
 
-    print("pop shape", pop.shape, "cpool shape", case_pool.shape)
+    pop_timepoint_i = []
+    pool_timepoint_i = []
+    sample_timepoint_i = []
 
-    return pop, case_pool, timepoint1, timepoint2, timepoint3, timepoint4, timepoint5, timepoint6, timepoint7, timepoint8
+    for i in timepoint_i:
+        pop_t = i[i["patient_id"].isin(pop_patients)]
+        pop_timepoint_i.append(pop_t)
+
+        pool_t = i[i["patient_id"].isin(pool_patients)]
+        pool_timepoint_i.append(pool_t)
+
+        sample_t = i[i["patient_id"].isin(sample_patient)]
+        sample_timepoint_i.append(sample_t)
+
+    print("pop shape", pop_timepoint_i[0].shape,
+          "rpool shape", pool_timepoint_i[0].shape,
+          "sample shape", sample_timepoint_i[0].shape)
+
+    return (pop_timepoint_i, pool_timepoint_i, sample_timepoint_i)
+
+def load_FitBit_dataset(pool_size=None):
+
+    # 15 columns are activities, 457 rows are people's IDs
+    df = pd.read_csv('dailyActivity_merged.csv', sep=',')
+
+    population = df
+
+    # create list of only ids
+    column_names = df.columns
+    ids = df["Id"]
+    ids = [int(x) for x in ids] # remove "'" from each id
+    unique_id = list(set(ids)) # list all 35 unique ids included
+
+    # get dataframe for each unique_id
+    unique_ids_data = []
+    for person in unique_id:
+        x = population[(population["Id"] == person)]
+        unique_ids_data.append(x)
+
+# TODO replace activitydate by range of length for each unique id. This will be the new timestamp
+        
+    # create random sample of ids for pop and pool
+    a = 30 if pool_size is None else pool_size
+    randomshuffle = ShuffleSplit(n_splits=1, test_size=a)
+    (pool, pop) = next(randomshuffle.split(unique_ids_data))
+    
+    # create list of 30 dataframes for each pop id
+    pop_data = []
+    for pop_index in pop:
+        x = unique_ids_data[pop_index]
+        pop_data.append(x)
+
+    # find maximum number of data submissions in pop
+    max_pop_entries = 0
+    for i in pop_data:
+        size = len(i)
+        if max_pop_entries < size:
+            max_pop_entries = size
+
+# TODO filter by timestamp date based on range
+    pop_timestamp = []
+    for i in range(max_pop_entries):
+        pop_timestamp_i = pd.DataFrame(columns=column_names, index=[0])
+
+        for j in pop_data:
+            if i < len(j):
+                timestamp_i = j.iloc[i]
+                pop_timestamp_i = pd.concat([pop_timestamp_i, timestamp_i.to_frame().T], ignore_index=True)
+        pop_timestamp_i = pop_timestamp_i.iloc[1:]
+        pop_timestamp_i = pop_timestamp_i.drop(columns=["ActivityDate","Calories\n"]) # quick fix
+        # TODO drop id too
+        pop_timestamp.append(pop_timestamp_i)
+
+
+    # create list of 5 dataframes for each pool id
+    pool_data = []
+    for pool_index in pool:
+        x = unique_ids_data[pool_index]
+        pool_data.append(x)
+
+    # find maximum number of data submissions in pool
+    max_pool_entries = 0
+    for i in pool_data:
+        size = len(i)
+        if max_pool_entries < size:
+            max_pool_entries = size
+
+    pool_timestamp = []
+    for i in range(max_pool_entries):
+        pool_timestamp_i = pd.DataFrame(columns=column_names, index=[0])
+
+        for j in pool_data:
+            if i < len(j):
+                timestamp_i = j.iloc[i]
+                pool_timestamp_i = pd.concat([pool_timestamp_i, timestamp_i.to_frame().T], ignore_index=True)
+        pool_timestamp_i = pool_timestamp_i.iloc[1:] # why is this suddenly 16 columns?? seems to be +1 column: "Calories\n"
+        pool_timestamp_i = pool_timestamp_i.drop(columns=["ActivityDate","Calories\n"]) # quick fix
+        pool_timestamp.append(pool_timestamp_i)
+
+    return pop_timestamp, pool_timestamp
 
 def L1(
         X_victim: ArrayLike, population, pool
@@ -186,9 +315,10 @@ def L1_ttest(victim, pop, pool):
     ttest = ttest_1samp(s, 0, axis=1, alternative="greater")[1]
     return 1-ttest
     
+# everything below is the fallback for roc_auc_score
 def L1_threshold(pop, pool, victim_pop=None, victim_pool=None):
-    pvalue_pop = np.ravel(L1_ttest(pop if victim_pop is None else victim_pop, pop, pool)[1])
-    pvalue_pool = np.ravel(L1_ttest(pool if victim_pool is None else victim_pool, pop, pool)[1])
+    pvalue_pop = np.ravel(L1_ttest(pop if victim_pop is None else victim_pop, pop, pool))
+    pvalue_pool = np.ravel(L1_ttest(pool if victim_pool is None else victim_pool, pop, pool))
     a = np.concatenate((pvalue_pop, pvalue_pool))
 
     threshold = a.max()+.1

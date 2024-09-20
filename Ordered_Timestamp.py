@@ -1,117 +1,139 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import random
 from sklearn.metrics import roc_auc_score
-from utils import load_timestamp_dataset, LLR, L1, L1_ttest, L1_threshold, LLR_threshold, ground_truth
+from utils import load_timestamp_dataset, LLR, L1, L1_ttest
+from scipy.spatial import distance
 
 # load dataset
-pop, case_pool, t1, t2, t3, t4, t5, t6, t7, t8 = load_timestamp_dataset()
-pop = pop.drop(columns=["disease", "timepoint"])
-pool = case_pool.drop(columns=["disease", "timepoint"])
-t1 = t1.drop(columns=["disease", "timepoint"])
-t2 = t2.drop(columns=["disease", "timepoint"])
-t3 = t3.drop(columns=["disease", "timepoint"])
-t4 = t4.drop(columns=["disease", "timepoint"])
-t5 = t5.drop(columns=["disease", "timepoint"])
-t6 = t6.drop(columns=["disease", "timepoint"])
-t7 = t7.drop(columns=["disease", "timepoint"])
-t8 = t8.drop(columns=["disease", "timepoint"])
-timestamps = [t1, t2, t3, t4, t5, t6, t7, t8] # samples of miRNAs over different weeks
+(pop_timestamps_graph, pool_timestamps_graph, sample_timestamps_graph) = load_timestamp_dataset()
 
-miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", ...]
-num_orders = 15 # number of different samples of MiRNAs
+for i in sample_timestamps_graph:
+    i.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
 
-shuffled_lists = []
-for j in range (num_orders):
-    current_miRNA_list = list(miRNAs)
-    random.shuffle(current_miRNA_list)
-    shuffled_lists.append(current_miRNA_list)
+# cosine similarity better than euclidean distance
+cosine_distances = []
+for u in sample_timestamps_graph:
+    timepoint_comparison = u
 
+    cosine_distance = []
+    for t in sample_timestamps_graph:
+        if (t.shape == (1,1205)) & (timepoint_comparison.shape == (1,1205)):
+            d = distance.cosine((timepoint_comparison.to_numpy()).ravel(), (t.to_numpy()).ravel())
+            cosine_distance.append(d)
+        else:
+            cosine_distance.append(0) #some impossible value to fill in the place of an empty value and keep the timestamps aligned
+    cosine_distances.append(cosine_distance)
 
-noise_fraction_L1 = []
-noise_fraction_LLR = []
-
-for t in timestamps:
-    auc_L1 = []
-    auc_LLR = []
-    num_miRNAs = []
-   
-# remove the mirna filter to make it just noisy, so graph is auc over time v auc
-    for i in range(2,len(miRNAs),2): # miRNAs range from 1 to 1207
-        aucs_L1 = []
-        aucs_LLR = []
-        num_miRNAs.append(i)
-
-        for j in range (num_orders):
-            current_shuffled_list = shuffled_lists[j]
-            selected_miRNAs = current_shuffled_list[:i]
-
-            # local_noised_pop = t[selected_miRNAs]
-            local_noised_pool = t[:-1][selected_miRNAs]
-
-            local_pop = pop[selected_miRNAs]
-            local_pool = pool[selected_miRNAs]
-
-
-            # pvalue_pop_L1 = L1_ttest(local_noised_pop, local_pop, local_pool)
-            pvalue_pool_L1 = L1_ttest(local_noised_pool, local_pop, local_pool)
-
-            # pvalue_pop_LLR = LLR(local_noised_pop, local_pop, local_pool)
-            pvalue_pool_LLR = LLR(local_noised_pool, local_pop, local_pool)
-
-
-            y_true_L1 = np.ones(len(pvalue_pool_L1))
-            y_score_L1 = pvalue_pool_L1
-            roc_L1 = roc_auc_score(y_true_L1, y_score_L1)
-
-            aucs_L1.append(roc_L1)
-
-            y_true_LLR = np.ones(len(pvalue_pool_LLR))
-            y_score_LLR = pvalue_pool_LLR
-            roc_LLR = roc_auc_score(y_true_LLR, y_score_LLR)
-            
-            aucs_LLR.append(roc_LLR)
-
-        if len(aucs_L1) >0:
-            auc_L1.append(np.average(aucs_L1))
-
-        if len(aucs_LLR) >0:
-            auc_LLR.append(np.average(aucs_LLR))
-
-    noise_fraction_L1.append(auc_L1)
-    noise_fraction_LLR.append(auc_LLR)
-
-
-# print(f'AUC score:{auc_L1}')
-# print(f'AUC score:{auc_LLR}')
-
-# plots!
+# plot cosine distance
 fig, ax = plt.subplots()
+for l in range(len(cosine_distances)):
+    ax.plot(range(len(cosine_distances)), cosine_distances[l], linewidth=3.0, label=f"timepoint {l}")
+plt.xlabel("timestamp")
+plt.ylabel("cosine distance")
+plt.legend(loc="upper right")
+plt.show()
 
-for l in range(len(timestamps)):
-    # ax.plot(num_miRNAs, noise_fraction_L1[l], linewidth=2.0, label=f"L1 {l}")
-    ax.plot(num_miRNAs, noise_fraction_LLR[l], linewidth=2.0, label=f"LLR {l}")
-ax.invert_xaxis()
+# some statistical plots for one individual of the dataset
+sample_timestamps_graph_deviation = []
+for t in sample_timestamps_graph:
+
+    sample_graph = t
+    mu_j = np.average(sample_graph, axis=0)
+    sigma_j = np.std(sample_graph, axis=0)
+    sample_timestamps_graph_deviation.append(sigma_j)
+
+    # histogram of 100 miRNAs from the individual
+    x = sample_graph.sample(100, axis=1)
+    plt.hist(x, bins=10)
+    plt.xlabel("sample of 100 miRNAs from population")
+    plt.ylabel("count of miRNAs within 10 different range values")
+    plt.show()
+
+    # histogram over all sigma j for all mirna
+    plt.hist(sigma_j, bins=300)
+    plt.xlabel("standard deviation of miRNAs")
+    plt.ylabel("number of the 1208 miRNAs in each bar")
+    plt.show()
+
+    # histogram over all sigma j / mu j for all mirna
+    if mu_j.all != 0:
+        plt.hist(np.divide(sigma_j,mu_j), bins=100)
+        plt.xlabel("standard deviation of miRNAs divided by mean")
+        plt.ylabel("number in each bar")
+        plt.show()
+
+# histogram showing standard deviations across all 8 timestamps of the individual
+plt.hist(sample_timestamps_graph_deviation, bins=40)
+plt.xlabel("8 timestamps of standard deviation of miRNAs from individual")
+plt.ylabel("count of deviations across 40 different range values")
+plt.show()
+
+
+num_orders = 50 # number of iterations to average over
+auc_L1 = []
+auc_LLR = []
+
+# for loop for numorder lots of train/test, then average at end
+for j in range (num_orders):
+
+    aucs_L1 = []
+    aucs_LLR = []
+
+    # load new partitioned dataset each time we call num_orders
+    (ti_pop, ti_pool, ti_sample) = load_timestamp_dataset()
+
+    for x, y in zip(ti_pop, ti_pool):
+        x.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
+        y.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
+
+    # configuring the reference pop & pool to match the dataframe of a particular timepoint
+    pop = ti_pop[0]
+    pool = ti_pool[0]
+
+    for t_pop, t_pool in zip(ti_pop, ti_pool):
+
+        # the 'noise' increases throughout each of the later timepoints the data is collected from
+        local_noised_pop = t_pop
+        local_noised_pool = t_pool
+        local_pop = pop
+        local_pool = pool
+
+        # get values for L1 & LLR statistics over the noisy stat inputs compared to the 'original' pop & pool
+        pvalue_pop_L1 = L1_ttest(local_noised_pop, local_pop, local_pool)
+        pvalue_pool_L1 = L1_ttest(local_noised_pool, local_pop, local_pool)
+    
+        pvalue_pop_LLR = LLR(local_noised_pop, local_pop, local_pool)
+        pvalue_pool_LLR = LLR(local_noised_pool, local_pop, local_pool)
+
+        # determine the performance of the attack comparing the accuracy of inference to the real data
+        y_true_L1 = np.concatenate((np.zeros(len(pvalue_pop_L1)), np.ones(len(pvalue_pool_L1))))
+        y_score_L1 = np.concatenate((pvalue_pop_L1, pvalue_pool_L1))
+        roc_L1 = roc_auc_score(y_true_L1, y_score_L1)
+        aucs_L1.append(roc_L1)
+
+        y_true_LLR = np.concatenate((np.zeros(len(pvalue_pop_LLR)), np.ones(len(pvalue_pool_LLR))))
+        y_score_LLR = np.concatenate((pvalue_pop_LLR, pvalue_pool_LLR))
+        roc_LLR = roc_auc_score(y_true_LLR, y_score_LLR)
+        aucs_LLR.append(roc_LLR)
+
+    # num_order rows of datasets, columns are each timestamp
+    if len(aucs_L1) >0:
+        auc_L1.append(aucs_L1)
+
+    if len(aucs_LLR) >0:
+        auc_LLR.append(aucs_LLR)
+
+# averaging the results from num_order iterations
+auc_L1 = np.average(auc_L1, axis=0)
+auc_LLR = np.average(auc_LLR, axis=0)
+
+# plotting the performance of the inference for each of the 8 timestamps
+fig, ax = plt.subplots()
+ax.plot(range(len(ti_pop)), auc_L1, "-b", linewidth=2.0, label="L1")
+ax.plot(range(len(ti_pool)), auc_LLR, "-r", linewidth=2.0, label="LLR")
 ax.set_ylim([0,1]) # enables comparable auc scores between L1 and LLR
-plt.xlabel("number MiRNAs")
+
+plt.xlabel("timestamp")
 plt.ylabel("AUC scores")
 plt.legend(loc="upper right")
-plt.show() 
-
-# TODO
-# check inference of patients when miRNA samples are taken a year apart
-# GSE68951 dataset takes miRNA samples for 0-18 months at 3 month intervals and 2-weeks after 0 months, 26 unhealthy individuals
-# !series_matrix_table_begin
-# GSE61741 dataset takes one lot of miRNA samples, 94 individuals here are healthy
-
-# return tp 2-8 to use as the noisy datasets for attack
-# look up papers using summ stats, use datasets and apply it. say, smartwatch
-# after we look for data that has a temporal aspect
-# start writing this up
-# GSR!!!!
-# graph x axis timepoints (later on for the paper make the 2 week plot closer)
-
-# Schedule group meeting with Mark & Pascal
-# 1st, omitcontrol from timestamp
-# 2nd, pop is only control vs pop is both control and t1
-# email results to Pascal and Mark
+plt.show()
