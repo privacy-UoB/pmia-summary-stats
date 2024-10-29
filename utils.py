@@ -86,7 +86,7 @@ def load_dataset(MiRNA_filter=None, random_sample=None, case_sample=None):
 
 def load_timestamp_dataset(MiRNA_filter=None):
 
-    # columns are 215 individuals, rows are 1026 miRNAs
+    # columns are 215 individuals, rows are 1026 (1205?) miRNAs
     df = pd.read_csv('GSE68951_series_matrix.txt', skiprows=58, skipfooter=1, sep='\t', index_col=0)
 
     population = df.transpose()
@@ -135,6 +135,27 @@ def load_timestamp_dataset(MiRNA_filter=None):
     # insert column label for patient id
     population.insert(0, 'patient_id', patient_id)
 
+    # add new row of NaN for all the missing timestamp entries for diseased individuals
+    # alternative method: convert dataframes into a list then convert back after
+    new_population = pd.DataFrame(columns=population.columns, index=[0])
+    for patient in unique_patient_id_nocontrol:
+        new_patient_df = pd.DataFrame(columns=population.columns, index=[0])
+        p = population[population["patient_id"] == f"{patient}"]
+        for i in range(8):
+            t = (p["timepoint"] == f"timepoint: {(i+1)}")
+            if (len(t)>i):
+                if (t[i]): # if i in t should replace if (len(t)>i): but IndexError
+                    new_patient_df = pd.concat([new_patient_df, p[t]], ignore_index=True)
+            else:
+                rowNaN = pd.Series([np.nan for i in range(len(p.columns))], index=p.columns)
+                rowNaN.iloc[0] = p.iat[0,0]
+                rowNaN.iloc[1] = p.iat[0,1]
+                rowNaN.iloc[2] = f"timepoint: {(i+1)}"
+                new_patient_df.loc[i+1] = rowNaN
+        new_patient_df = new_patient_df.iloc[1:] # is there a way to stop row0 being NaN from setup??
+        new_population = pd.concat([new_population, new_patient_df], ignore_index=True)
+    new_population = new_population.iloc[1:]
+
     # filtering data into the 8 timepoints for diseases only
     """
     timepoint 1 (or any other chosen timepoint) is similar to the original pool
@@ -143,7 +164,11 @@ def load_timestamp_dataset(MiRNA_filter=None):
     timepoint_i = []
     for i in range(8):
         t = population[(population["timepoint"] == f"timepoint: {(i+1)}") & (population["disease"] == "disease: lung cancer")]
+        # !!! remember to comment this in again when wanting NaN !!!
+        # t = new_population[(new_population["timepoint"] == f"timepoint: {(i+1)}") & 
+        #                    (new_population["disease"] == "disease: lung cancer")]
         timepoint_i.append(t)
+        print(t.shape)
 
     # filter dataset via patient ids into distinct population and pool
     randomshuffle = ShuffleSplit(n_splits=1, test_size=18) # (test, train) = function -> matches ML train/test splitting order

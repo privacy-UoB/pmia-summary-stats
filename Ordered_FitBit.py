@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import ShuffleSplit
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve
 from utils import load_FitBit_dataset, LLR, L1, L1_ttest
 
 # pop, pool = load_FitBit_dataset()
@@ -12,12 +12,16 @@ from utils import load_FitBit_dataset, LLR, L1, L1_ttest
 num_orders = 50 # number of averages
 auc_L1 = []
 auc_LLR = []
+# roc_curve_L1 = []
+# roc_curve_LLR = []
 
 # for loop for numorder lots of train/test, then average at end
 for j in range (num_orders):
 
     aucs_L1 = []
     aucs_LLR = []
+    # roc_curves_L1 = []
+    # roc_curves_LLR = []
 
     # load dataset
     population, random_pool = load_FitBit_dataset()
@@ -45,27 +49,35 @@ for j in range (num_orders):
 
         y_true_L1 = np.concatenate((np.zeros(len(pvalue_pop_L1)), np.ones(len(pvalue_pool_L1))))
         y_score_L1 = np.concatenate((pvalue_pop_L1, pvalue_pool_L1))
+
         roc_L1 = roc_auc_score(y_true_L1, y_score_L1)
         aucs_L1.append(roc_L1)
+        # curve_L1 = roc_curve(y_true_L1, y_score_L1))
+        # roc_curves_L1.append(curve_L1)
 
         y_true_LLR = np.concatenate((np.zeros(len(pvalue_pop_LLR)), np.ones(len(pvalue_pool_LLR))))
         y_score_LLR = np.concatenate((pvalue_pop_LLR, pvalue_pool_LLR))
+
         roc_LLR = roc_auc_score(y_true_LLR, y_score_LLR)
         aucs_LLR.append(roc_LLR)
-
+        # curve_LLR = roc_curve(y_true_LLR, y_score_LLR)
+        # roc_curves_LLR.append(curve_LLR)
 
     if len(aucs_L1) >0:
         auc_L1.append(aucs_L1)
+    # if len(roc_curves_L1) >0:
+    #     roc_curve_L1.append(roc_curves_L1)
 
     if len(aucs_LLR) >0:
         auc_LLR.append(aucs_LLR)
+    # if len(roc_curves_LLR) >0:
+    #     roc_curve_LLR.append(roc_curves_LLR)
 
 # num_order rows of datasets, columns are each timestamp
 auc_L1 = np.average(auc_L1, axis=0)
 auc_LLR = np.average(auc_LLR, axis=0)
-
-# print(f'AUC score:{auc_L1}')
-# print(f'AUC score:{auc_LLR}')
+# roc_curve_L1 = np.average(roc_curve_L1, axis=0)
+# roc_curve_LLR = np.average(roc_curve_LLR, axis=0)
 
 
 # plots!
@@ -78,3 +90,14 @@ plt.xlabel("timestamp")
 plt.ylabel("AUC scores")
 plt.legend(loc="upper right")
 plt.show()
+
+# # plots!
+# fig, ax = plt.subplots()
+# ax.plot([range(iterations)], roc_curve_L1, "-b", linewidth=2.0, label="L1")
+# ax.plot([range(iterations)], roc_curve_LLR, "-r", linewidth=2.0, label="LLR")
+# ax.set_ylim([0,1]) # enables comparable auc scores between L1 and LLR
+
+# plt.xlabel("timestamp")
+# plt.ylabel("ROC scores")
+# plt.legend(loc="upper right")
+# plt.show()

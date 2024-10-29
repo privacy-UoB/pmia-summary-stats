@@ -4,8 +4,13 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
 from utils import ground_truth, load_dataset, L1_threshold, L1_ttest, LLR, D3
 
-pop, rpool, cpool = load_dataset(case_sample=D3)
-pop = pop.drop(columns="diseases")
+# load dataset
+pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
+
+pop_rpool = pop_rpool.drop(columns="diseases")
+pop_cpool = pop_cpool.drop(columns="diseases")
+pop = pop_cpool # make pop configurable
+
 rpool = rpool.drop(columns="diseases")
 cpool = cpool.drop(columns="diseases")
 pool = cpool # make pool configurable
@@ -55,16 +60,17 @@ auc_L1 = []
 auc_LLR = []
 # fractions of standard deviation applied to the dataset
 # multiplier = [0, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
-multiplier = np.arange(0, 8, 0.04)
+multiplier = np.logspace(0, 15, base=2) # used for standard noise values
+# multiplier = np.arange(0, 8, 0.04) # sufficient for m * sigma_j
 
 for m in multiplier:
     aucs_L1 = []
     aucs_LLR = []
-    for j in range (40):
-        # pop_noise = np.random.normal(0, m * 1000, pop.shape)
-        # pool_noise = np.random.normal(0, m * 1000, pool.shape)
-        pop_noise = np.random.normal(0, m * sigma_j, pop.shape)
-        pool_noise = np.random.normal(0, m * sigma_j, pool.shape)
+    for j in range (30):
+        pop_noise = np.random.normal(0, m, pop.shape) #make this A LOT bigger, then plot on np.logspace scale
+        pool_noise = np.random.normal(0, m, pool.shape)
+        # pop_noise = np.random.normal(0, m * sigma_j, pop.shape)
+        # pool_noise = np.random.normal(0, m * sigma_j, pool.shape)
         # still need to double check random.normal when inputting array of std dev
 
         noised_pop = pop + pop_noise

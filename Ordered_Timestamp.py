@@ -2,72 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
 from utils import load_timestamp_dataset, LLR, L1, L1_ttest
-from scipy.spatial import distance
-
-# load dataset
-(pop_timestamps_graph, pool_timestamps_graph, sample_timestamps_graph) = load_timestamp_dataset()
-
-for i in sample_timestamps_graph:
-    i.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
-
-# cosine similarity better than euclidean distance
-cosine_distances = []
-for u in sample_timestamps_graph:
-    timepoint_comparison = u
-
-    cosine_distance = []
-    for t in sample_timestamps_graph:
-        if (t.shape == (1,1205)) & (timepoint_comparison.shape == (1,1205)):
-            d = distance.cosine((timepoint_comparison.to_numpy()).ravel(), (t.to_numpy()).ravel())
-            cosine_distance.append(d)
-        else:
-            cosine_distance.append(0) #some impossible value to fill in the place of an empty value and keep the timestamps aligned
-    cosine_distances.append(cosine_distance)
-
-# plot cosine distance
-fig, ax = plt.subplots()
-for l in range(len(cosine_distances)):
-    ax.plot(range(len(cosine_distances)), cosine_distances[l], linewidth=3.0, label=f"timepoint {l}")
-plt.xlabel("timestamp")
-plt.ylabel("cosine distance")
-plt.legend(loc="upper right")
-plt.show()
-
-# some statistical plots for one individual of the dataset
-sample_timestamps_graph_deviation = []
-for t in sample_timestamps_graph:
-
-    sample_graph = t
-    mu_j = np.average(sample_graph, axis=0)
-    sigma_j = np.std(sample_graph, axis=0)
-    sample_timestamps_graph_deviation.append(sigma_j)
-
-    # histogram of 100 miRNAs from the individual
-    x = sample_graph.sample(100, axis=1)
-    plt.hist(x, bins=10)
-    plt.xlabel("sample of 100 miRNAs from population")
-    plt.ylabel("count of miRNAs within 10 different range values")
-    plt.show()
-
-    # histogram over all sigma j for all mirna
-    plt.hist(sigma_j, bins=300)
-    plt.xlabel("standard deviation of miRNAs")
-    plt.ylabel("number of the 1208 miRNAs in each bar")
-    plt.show()
-
-    # histogram over all sigma j / mu j for all mirna
-    if mu_j.all != 0:
-        plt.hist(np.divide(sigma_j,mu_j), bins=100)
-        plt.xlabel("standard deviation of miRNAs divided by mean")
-        plt.ylabel("number in each bar")
-        plt.show()
-
-# histogram showing standard deviations across all 8 timestamps of the individual
-plt.hist(sample_timestamps_graph_deviation, bins=40)
-plt.xlabel("8 timestamps of standard deviation of miRNAs from individual")
-plt.ylabel("count of deviations across 40 different range values")
-plt.show()
-
 
 num_orders = 50 # number of iterations to average over
 auc_L1 = []
@@ -84,7 +18,22 @@ for j in range (num_orders):
 
     for x, y in zip(ti_pop, ti_pool):
         x.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
+        # for row in range(len(x)):
+        #     (x.iloc[row]).dropna(inplace=True) # remove NaN rows from the dataframe
+        # print(x)
+
         y.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
+        # for row in range(len(y)):
+        #     (y.iloc[row]).dropna() # remove NaN rows from the dataframe
+
+    # for i in range(8):
+    #     for row in range(len(ti_pop[i])):
+    #         (ti_pop[i].iloc[row]).dropna(inplace=True) # remove NaN rows from the dataframe
+    #         print(ti_pop[i])
+    #     for row in range(len(ti_pool[i])):
+    #         (ti_pool[i].iloc[row]).dropna() # remove NaN rows from the dataframe
+# This isn't working because it's 'a value is trying to be set on a copy of a slice from a DataFrame'?????
+        # so why is the above for x, y in zip() working?!?!??
 
     # configuring the reference pop & pool to match the dataframe of a particular timepoint
     pop = ti_pop[0]
