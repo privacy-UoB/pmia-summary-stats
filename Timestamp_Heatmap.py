@@ -8,7 +8,7 @@ from scipy.spatial import distance
 # df = df.dropna() # this drops all NaN values from a dataframe?
 
 # load dataset (ensure it's the NaN, i.e. t = new population)
-(pop_timestamps_graph, pool_timestamps_graph, sample_timestamps_graph) = load_timestamp_dataset()
+(pop_timestamps_graph, pool_timestamps_graph, sample_timestamps_graph) = load_timestamp_dataset(withNaN=True)
 # pop_timestamps_graph is a list of length 8 timestamps, each containing <=18 individuals
 # pool_timestamps_graph is a list of length 8 timestamps, each containing <=8 individuals
 

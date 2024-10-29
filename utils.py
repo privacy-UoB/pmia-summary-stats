@@ -84,7 +84,7 @@ def load_dataset(MiRNA_filter=None, random_sample=None, case_sample=None):
 
     return filter_population_rpool, filter_population_cpool, random_pool, case_pool
 
-def load_timestamp_dataset(MiRNA_filter=None):
+def load_timestamp_dataset(MiRNA_filter=None, withNaN=None):
 
     # columns are 215 individuals, rows are 1026 (1205?) miRNAs
     df = pd.read_csv('GSE68951_series_matrix.txt', skiprows=58, skipfooter=1, sep='\t', index_col=0)
@@ -164,9 +164,9 @@ def load_timestamp_dataset(MiRNA_filter=None):
     timepoint_i = []
     for i in range(8):
         t = population[(population["timepoint"] == f"timepoint: {(i+1)}") & (population["disease"] == "disease: lung cancer")]
-        # !!! remember to comment this in again when wanting NaN !!!
-        # t = new_population[(new_population["timepoint"] == f"timepoint: {(i+1)}") & 
-        #                    (new_population["disease"] == "disease: lung cancer")]
+        if withNaN:
+            t = new_population[(new_population["timepoint"] == f"timepoint: {(i+1)}") & 
+                               (new_population["disease"] == "disease: lung cancer")]
         timepoint_i.append(t)
         print(t.shape)
 
