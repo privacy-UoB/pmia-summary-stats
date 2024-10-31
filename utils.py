@@ -163,10 +163,12 @@ def load_timestamp_dataset(MiRNA_filter=None, withNaN=None):
     """
     timepoint_i = []
     for i in range(8):
-        t = population[(population["timepoint"] == f"timepoint: {(i+1)}") & (population["disease"] == "disease: lung cancer")]
         if withNaN:
             t = new_population[(new_population["timepoint"] == f"timepoint: {(i+1)}") & 
                                (new_population["disease"] == "disease: lung cancer")]
+        else:
+            t = population[(population["timepoint"] == f"timepoint: {(i+1)}") & 
+                           (population["disease"] == "disease: lung cancer")]
         timepoint_i.append(t)
         print(t.shape)
 
