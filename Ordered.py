@@ -9,8 +9,12 @@ from utils import load_dataset, LLR, L1, L1_ttest, L1_threshold, LLR_threshold, 
     # 2nd: 6 case groups D19, D17, D10, D7, D3, D1
 
 # load dataset
-pop, rpool, cpool = load_dataset(case_sample=D3)
-pop = pop.drop(columns="diseases")
+pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
+
+pop_rpool = pop_rpool.drop(columns="diseases")
+pop_cpool = pop_cpool.drop(columns="diseases")
+pop = pop_cpool # make pop configurable
+
 rpool = rpool.drop(columns="diseases")
 cpool = cpool.drop(columns="diseases")
 pool = cpool # make pool configurable

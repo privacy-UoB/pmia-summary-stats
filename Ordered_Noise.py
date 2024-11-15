@@ -14,17 +14,17 @@ pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
 
 pop_rpool = pop_rpool.drop(columns="diseases")
 pop_cpool = pop_cpool.drop(columns="diseases")
-pop = pop_cpool # make pop configurable
+pop = pop_rpool # make pop configurable
 
 rpool = rpool.drop(columns="diseases")
 cpool = cpool.drop(columns="diseases")
-pool = cpool # make pool configurable
+pool = rpool # make pool configurable
 
 sigma_j = np.std(pop, axis=0) # this is doing it over all the columns (miRNAs)
 multiplier = [0, 0.25, 0.5, 0.75, 1] # fractions of standard deviation applied to the dataset
 
 miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", ...]
-num_orders = 15 # number of different samples of MiRNAs
+num_orders = 40 # number of different samples of MiRNAs
 
 shuffled_lists = []
 nonneg_noised_pop_matrix = []
@@ -120,8 +120,8 @@ for count, m in enumerate(multiplier):
 fig, ax = plt.subplots()
 
 for l in range(len(multiplier)):
-    # ax.plot(num_miRNAs, noise_fraction_L1[l], linewidth=2.0, label=f"L1 {l}")
-    ax.plot(num_miRNAs, noise_fraction_LLR[l], linewidth=2.0, label=f"LLR {l}")
+    ax.plot(num_miRNAs, noise_fraction_L1[l], linewidth=2.0, label=f"L1 {l}")
+    # ax.plot(num_miRNAs, noise_fraction_LLR[l], linewidth=2.0, label=f"LLR {l}")
 ax.invert_xaxis()
 ax.set_ylim([0.5,1]) # enables comparable auc scores between L1 and LLR
 plt.xlabel("number MiRNAs")

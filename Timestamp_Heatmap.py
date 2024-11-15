@@ -64,8 +64,8 @@ print(len(timepoint_distance))
 
 # plot cosine distance
 fig, ax = plt.subplots()
-ax.plot(range(len(timepoint_distance)), timepoint_distance, linewidth=3.0, label=f"all timepoints")
-plt.xlabel("individual")
+ax.plot(range(len(timepoint_distance)), timepoint_distance, linewidth=3.0)
+plt.xlabel("timestamp per individual")
 plt.ylabel("cosine distance")
 plt.legend(loc="upper right")
 plt.show() # something is going wrong or just messy??

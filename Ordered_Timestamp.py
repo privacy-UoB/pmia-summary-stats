@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
 from utils import load_timestamp_dataset, LLR, L1, L1_ttest
 
-num_orders = 50 # number of iterations to average over
+num_orders = 1 # number of iterations to average over
 auc_L1 = []
 auc_LLR = []
 
@@ -80,7 +80,7 @@ auc_LLR = np.average(auc_LLR, axis=0)
 fig, ax = plt.subplots()
 ax.plot(range(len(ti_pop)), auc_L1, "-b", linewidth=2.0, label="L1")
 ax.plot(range(len(ti_pool)), auc_LLR, "-r", linewidth=2.0, label="LLR")
-ax.set_ylim([0,1]) # enables comparable auc scores between L1 and LLR
+ax.set_ylim([0.3,1]) # enables comparable auc scores between L1 and LLR
 
 plt.xlabel("timestamp")
 plt.ylabel("AUC scores")

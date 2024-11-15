@@ -279,6 +279,19 @@ def load_FitBit_dataset(pool_size=None):
 
     return pop_timestamp, pool_timestamp
 
+def split_pool(pop, pool):
+    # filter dataset via cpool into distinct added to population and remaining of split cpool
+    randomshuffle = ShuffleSplit(n_splits=1, test_size=(int(len(pool)/4)))
+    (pool_patients, pop_patients) = next(randomshuffle.split(pool))
+
+    pop_patients = pool.iloc[pop_patients]
+    pool_patients = pool.iloc[pool_patients]
+
+    split_pop = pd.concat([pop, pop_patients], ignore_index=True)
+    split_pool = pool_patients
+
+    return split_pop, split_pool, pop_patients
+
 def L1(
         X_victim: ArrayLike, population, pool
 ):

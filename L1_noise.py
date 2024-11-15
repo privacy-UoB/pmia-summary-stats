@@ -66,7 +66,7 @@ multiplier = np.logspace(0, 15, base=2) # used for standard noise values
 for m in multiplier:
     aucs_L1 = []
     aucs_LLR = []
-    for j in range (30):
+    for j in range (40):
         pop_noise = np.random.normal(0, m, pop.shape) #make this A LOT bigger, then plot on np.logspace scale
         pool_noise = np.random.normal(0, m, pool.shape)
         # pop_noise = np.random.normal(0, m * sigma_j, pop.shape)

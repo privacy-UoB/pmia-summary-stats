@@ -14,16 +14,20 @@ for i in range(10,470,10):
         if ret is None:
             del num_miRNAs[-1]
             break
-        pop, rpool, cpool = ret
+        rpop, cpop, rpool, cpool = ret
         # pop = [pop(50), pop(100), ..., pop(1000)]
         # rpool = [rpool(50), rpool(100), ..., rpool(1000)]
         # cpool = [cpool(50), cpool(100), ..., cpool(1000)]
         # -> zip[(pop(50),rpool(50),cpool(50)), (pop(100), rpool(100), cpool(100)), ..., (pop(1000), rpool(1000), cpool(1000))]
 
-        pop = pop.drop(columns="diseases")
+        pop_rpool = rpop.drop(columns="diseases")
+        pop_cpool = cpop.drop(columns="diseases")
+        pop = pop_cpool # make pop configurable
+
         rpool = rpool.drop(columns="diseases")
         cpool = cpool.drop(columns="diseases")
         pool = cpool # make pool configurable
+
         victim = pool.iloc[10]
 
         # print(LLR(victim, pop, pool).sum()) # only works if LLR sum axis=0??
@@ -68,6 +72,7 @@ fig, ax = plt.subplots()
 # ax.set_xscale("log")
 
 ax.plot(num_miRNAs, auc, linewidth=2.0)
+ax.invert_xaxis()
 plt.xlabel("number MiRNAs")
 plt.ylabel("ROC scores")
 plt.show()

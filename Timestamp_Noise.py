@@ -30,7 +30,8 @@ for x, y in zip(ti_pop, ti_pool):
 
 
 # fractions of standard deviation applied to the dataset
-multiplier = np.arange(0, 20, 0.1)
+multiplier = np.arange(0, 8, 0.04)
+# multiplier = np.arange(0, 20, 0.1)
 num_orders = 30 # number of iterations to average over
 
 # * noisy_timestamps_L1 = []
