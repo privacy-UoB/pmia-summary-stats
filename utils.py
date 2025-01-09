@@ -303,13 +303,25 @@ def L1(
     and mu-hat_j is the average miRNA j in the pool.
     """
 
+    population = np.array(population)
+    pool = np.array(pool)
+    X_victim = np.array(X_victim)
+
     mu = np.average(population, axis=0)
     mu_hat = np.average(pool, axis=0)
 
     population_difference = np.abs(X_victim - mu)
     pool_difference = np.abs(X_victim - mu_hat)
 
-    return population_difference - pool_difference
+    print("pop mean", mu, "pool mean", mu_hat, "pop diff", population_difference, "pool diff", pool_difference)
+
+    # mu = np.average(population, axis=0).reshape(1, population.shape[1])
+    # mu_hat = np.average(pool, axis=0).reshape(1, pool.shape[1])
+
+    # population_difference = np.abs(np.subtract(X_victim, mu))
+    # pool_difference = np.abs(np.subtract(X_victim, mu_hat))
+
+    return np.subtract(population_difference, pool_difference)
 
 # LLR taken over all individuals i for each miRNA j
 def LLR(
@@ -326,6 +338,10 @@ def LLR(
 # axis0 means function applied over all values in a column (x_1 = y_11, y_21, y_n1, x_2 = y_12, y_22, y_n2)
 # axis1 means function applied to rows (x_1 = y_11, y_12, y_1n, x_2 = y_21, y_22, y_2n)
     
+    population = np.array(population)
+    pool = np.array(pool)
+    X_victim = np.array(X_victim)
+
     mu = np.average(population, axis=0)
     mu_hat = np.average(pool, axis=0)
 
@@ -335,11 +351,33 @@ def LLR(
     sigma = np.std(population, axis=0)
     sigma_hat = np.std(pool, axis=0)
 
+    print(X_victim.shape, mu.shape, var.shape)
+    
+    p = np.square(X_victim - mu)
+    print(p.shape)
     population_difference = np.divide(np.square(X_victim - mu),2*var)
     pool_difference = np.divide(np.square(X_victim - mu_hat),2*var_hat)
 
     simplified_expression = population_difference - pool_difference + np.log(np.divide(sigma,sigma_hat))
     # this should be a matrix over all victims for each of their miRNAs j
+
+    # population = np.array(population)
+    # pool = np.array(pool)
+    # X_victim = np.array(X_victim)
+
+    # mu = np.average(population, axis=0).reshape(1, population.shape[1])
+    # mu_hat = np.average(pool, axis=0).reshape(1, pool.shape[1])
+
+    # var = np.var(population, axis=0).reshape(1, population.shape[1])
+    # var_hat = np.var(pool, axis=0).reshape(1, pool.shape[1])
+
+    # sigma = np.std(population, axis=0).reshape(1, population.shape[1])
+    # sigma_hat = np.std(pool, axis=0).reshape(1, pool.shape[1])
+
+    # population_difference = np.divide(np.square(np.subtract(X_victim, mu)),2*var)
+    # pool_difference = np.divide(np.square(np.subtract(X_victim, mu_hat)),2*var_hat)
+
+    # simplified_expression = np.subtract(population_difference, pool_difference) + np.log(np.divide(sigma,sigma_hat))
 
     s = np.sum(simplified_expression, axis=1)
     return np.transpose([s])

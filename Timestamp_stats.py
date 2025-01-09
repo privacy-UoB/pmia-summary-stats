@@ -116,6 +116,7 @@ for i in range(len(pop_timestamps_graph)):
 
 # some statistical plots for one individual of the dataset
 sample_timestamps_graph_deviation = []
+one_miRNA = []
 for index, t in enumerate(sample_timestamps_graph):
 
     sample_graph = t
@@ -156,8 +157,20 @@ for index, t in enumerate(sample_timestamps_graph):
         plt.ylabel("number in each bar")
         plt.show()
 
+        # do the 1 miRNA compare over all 8 timepoints here
+        # range = np.random.randint([0, 401, 802], [400, 801, 1205])
+        range = np.random.randint(0, 1205)
+        one_difference = np.ravel(sample_graph)[range] - np.ravel(previous_graph)[range]
+        one_miRNA.append(one_difference)
+
 # histogram showing standard deviations across all 8 timestamps of the individual
 plt.hist(sample_timestamps_graph_deviation, bins=40)
 plt.xlabel("8 timestamps of standard deviation of miRNAs from individual")
 plt.ylabel("count of deviations across 40 different range values")
+plt.show()
+
+# histogram showing difference for one miRNA for one individual across 8 timestamps
+plt.hist(one_miRNA, bins=100)
+plt.xlabel("for one miRNA, t[n]-t[n-1] for all n in no_timestamp")
+plt.ylabel("number in each bar")
 plt.show()

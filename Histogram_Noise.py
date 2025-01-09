@@ -100,16 +100,16 @@ for m in range(len(multiplier)):
     # plt.legend(loc="upper right")
     # plt.show()
 
-    # histogram showing standard deviations across all 8 timestamps of the individual
-    plt.hist((p_values_pop_L1[m], p_values_pool_L1[m]), bins=50, label=f"noise multiplier number {m}")
-    plt.xlabel("p values pop & pool L1")
-    plt.ylabel("count of deviations across 50 different range values")
-    plt.legend(loc="upper right")
-    plt.show()
+    # # histogram showing standard deviations across all 8 timestamps of the individual
+    # plt.hist(p_values_cpoolintopop_L1[m], bins=50, label=f"noise multiplier number {m}")
+    # plt.xlabel("p values cpool moved to pop L1")
+    # plt.ylabel("count of deviations across 50 different range values")
+    # plt.legend(loc="upper right")
+    # plt.show()
 
     # histogram showing standard deviations across all 8 timestamps of the individual
-    plt.hist(p_values_cpoolintopop_L1[m], bins=50, label=f"noise multiplier number {m}")
-    plt.xlabel("p values cpool moved to pop L1")
+    plt.hist((p_values_pop_L1[m], p_values_pool_L1[m], p_values_cpoolintopop_L1[m]), bins=50, label=f"noise multiplier number {m}")
+    plt.xlabel("p values pop & pool L1")
     plt.ylabel("count of deviations across 50 different range values")
     plt.legend(loc="upper right")
     plt.show()
@@ -128,19 +128,16 @@ for m in range(len(multiplier)):
     # plt.legend(loc="upper right")
     # plt.show()
 
+    # # histogram showing standard deviations across all 8 timestamps of the individual
+    # plt.hist(p_values_cpoolintopop_LLR[m], bins=100, label=f"noise multiplier number {m}")
+    # plt.xlabel("p values cpool moved to pop L1")
+    # plt.ylabel("count of deviations across 100 different range values")
+    # plt.legend(loc="upper right")
+    # plt.show()
+
     # histogram showing standard deviations across all 8 timestamps of the individual
-    plt.hist((p_values_pop_LLR[m], p_values_pool_LLR[m]), bins=300, label=f"noise multiplier number {m}")
+    plt.hist((p_values_pop_LLR[m], p_values_pool_LLR[m], p_values_cpoolintopop_LLR[m]), bins=300, label=f"noise multiplier number {m}")
     plt.xlabel("p values pop & pool LLR")
     plt.ylabel("count of deviations across 300 different range values")
     plt.legend(loc="upper right")
     plt.show()
-
-    # histogram showing standard deviations across all 8 timestamps of the individual
-    plt.hist(p_values_cpoolintopop_LLR[m], bins=100, label=f"noise multiplier number {m}")
-    plt.xlabel("p values cpool moved to pop L1")
-    plt.ylabel("count of deviations across 100 different range values")
-    plt.legend(loc="upper right")
-    plt.show()
-
-# increase no bins, also show split pool separetely
-# can we do better with knowing distribution is gaussian?
