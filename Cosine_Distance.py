@@ -1,10 +1,7 @@
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.spatial import distance
-from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import ShuffleSplit
-from utils import load_dataset, load_timestamp_dataset, LLR, L1, L1_ttest, D3, split_pool
+from utils_datasets import load_dataset, drop_dataset_index, D3, split_pool
 
 # Do the cosine distance comparison on the original dataset for the population, the pool, 
 # then the split case pool (some fraction of the case pool added to the population). This will 
@@ -13,16 +10,12 @@ from utils import load_dataset, load_timestamp_dataset, LLR, L1, L1_ttest, D3, s
 
 # load dataset
 pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
+pop_rpool, pop_cpool, rpool, cpool = drop_dataset_index(pop_rpool, pop_cpool, rpool, cpool)
 
-pop_rpool = pop_rpool.drop(columns="diseases")
-pop_cpool = pop_cpool.drop(columns="diseases")
 pop = pop_cpool # make pop configurable
-
-rpool = rpool.drop(columns="diseases")
-cpool = cpool.drop(columns="diseases")
 pool = cpool # make pool configurable
 
-split_pop, split_cpool = split_pool(pop, pool)
+split_pop, split_cpool, cpool_into_pop = split_pool(pop, pool)
 
 # cosine similarity pop
 cosine_distance_pop = []

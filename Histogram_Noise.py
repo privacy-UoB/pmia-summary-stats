@@ -1,18 +1,14 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score
-from utils import load_dataset, LLR, L1, L1_ttest, L1_threshold, LLR_threshold, ground_truth, D3, split_pool
+from utils_datasets import load_dataset, D3, split_pool, drop_dataset_index
+from utils import auc_scores, LLR, L1_ttest
 
 # load dataset
 pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
+pop_rpool, pop_cpool, rpool, cpool = drop_dataset_index(pop_rpool, pop_cpool, rpool, cpool)
 
-pop_rpool = pop_rpool.drop(columns="diseases")
-pop_cpool = pop_cpool.drop(columns="diseases")
 pop = pop_cpool # make pop configurable
-
-rpool = rpool.drop(columns="diseases")
-cpool = cpool.drop(columns="diseases")
 pool = cpool # make pool configurable
 
 split_pop, split_cpool, cpool_into_pop = split_pool(pop, pool)
@@ -54,88 +50,68 @@ for m in multiplier:
     noised_cpoolintopop = cpool_into_pop + cpoolintopop_noise
     nonneg_cpoolintopop_noise = np.clip(noised_cpoolintopop, 0, None)
 
-
-    pvalue_pop_L1 = L1_ttest(nonneg_pop_noise, pop, pool)
-    pvalue_pool_L1 = L1_ttest(nonneg_pool_noise, pop, pool)
+    roc_L1, pvalue_pop_L1, pvalue_pool_L1 = auc_scores(nonneg_pop_noise, nonneg_pool_noise, pop, pool)
+    roc_LLR, pvalue_pop_LLR, pvalue_pool_LLR = auc_scores(nonneg_pop_noise, nonneg_pool_noise, pop, pool, LR=True)
     pvalue_cpoolintopop_L1 = L1_ttest(nonneg_cpoolintopop_noise, pop, pool)
+    pvalue_cpoolintopop_LLR = LLR(nonneg_cpoolintopop_noise, pop, pool)
 
     p_values_pop_L1.append(pvalue_pop_L1)
     p_values_pool_L1.append(pvalue_pool_L1)
     p_values_cpoolintopop_L1.append(pvalue_cpoolintopop_L1)
 
-    pvalue_pop_LLR = LLR(nonneg_pop_noise, pop, pool)
-    pvalue_pool_LLR = LLR(nonneg_pool_noise, pop, pool)
-    pvalue_cpoolintopop_LLR = LLR(nonneg_cpoolintopop_noise, pop, pool)
+    p_values_pop_LLR.append((pvalue_pop_LLR.ravel()))
+    p_values_pool_LLR.append((pvalue_pool_LLR.ravel()))
+    p_values_cpoolintopop_LLR.append((pvalue_cpoolintopop_LLR.ravel()))
 
-    pvalue_pop_LLR_ravel = pvalue_pop_LLR.ravel()
-    p_values_pop_LLR.append(pvalue_pop_LLR_ravel)
-    pvalue_pool_LLR_ravel = pvalue_pool_LLR.ravel()
-    p_values_pool_LLR.append(pvalue_pool_LLR_ravel)
-    pvalue_cpoolintopop_LLR_ravel = pvalue_cpoolintopop_LLR.ravel()
-    p_values_cpoolintopop_LLR.append(pvalue_cpoolintopop_LLR_ravel)
-
-
-    y_true_L1 = np.concatenate((np.zeros(len(pvalue_pop_L1)), np.ones(len(pvalue_pool_L1))))
-    y_score_L1 = np.concatenate((pvalue_pop_L1, pvalue_pool_L1))
-    roc_L1 = roc_auc_score(y_true_L1, y_score_L1)
     aucs_L1.append(roc_L1)
-
-    y_true_LLR = np.concatenate((np.zeros(len(pvalue_pop_LLR)), np.ones(len(pvalue_pool_LLR))))
-    y_score_LLR = np.concatenate((pvalue_pop_LLR, pvalue_pool_LLR))
-    roc_LLR = roc_auc_score(y_true_LLR, y_score_LLR)
     aucs_LLR.append(roc_LLR)
         
 # histogram showing standard deviations across all 8 timestamps of the individual
 for m in range(len(multiplier)):
+    # L1
     # plt.hist(p_values_pop_L1[m], bins=50, label=f"noise multiplier number {m}")
     # plt.xlabel("p values population L1")
     # plt.ylabel("count of deviations across 50 different range values")
     # plt.legend(loc="upper right")
     # plt.show()
 
-    # # histogram showing standard deviations across all 8 timestamps of the individual
     # plt.hist(p_values_pool_L1[m], bins=50, label=f"noise multiplier number {m}")
     # plt.xlabel("p values pool L1")
     # plt.ylabel("count of deviations across 50 different range values")
     # plt.legend(loc="upper right")
     # plt.show()
 
-    # # histogram showing standard deviations across all 8 timestamps of the individual
     # plt.hist(p_values_cpoolintopop_L1[m], bins=50, label=f"noise multiplier number {m}")
     # plt.xlabel("p values cpool moved to pop L1")
     # plt.ylabel("count of deviations across 50 different range values")
     # plt.legend(loc="upper right")
     # plt.show()
 
-    # histogram showing standard deviations across all 8 timestamps of the individual
     plt.hist((p_values_pop_L1[m], p_values_pool_L1[m], p_values_cpoolintopop_L1[m]), bins=50, label=f"noise multiplier number {m}")
     plt.xlabel("p values pop & pool L1")
     plt.ylabel("count of deviations across 50 different range values")
     plt.legend(loc="upper right")
     plt.show()
 
-    # # histogram showing standard deviations across all 8 timestamps of the individual
+    # LLR
     # plt.hist(p_values_pop_LLR[m], bins=300, label=f"noise multiplier number {m}")
     # plt.xlabel("p values population LLR")
     # plt.ylabel("count of deviations across 300 different range values")
     # plt.legend(loc="upper right")
     # plt.show()
 
-    # # histogram showing standard deviations across all 8 timestamps of the individual
     # plt.hist(p_values_pool_LLR[m], bins=100, label=f"noise multiplier number {m}")
     # plt.xlabel("p values pool LLR")
     # plt.ylabel("count of deviations across 100 different range values")
     # plt.legend(loc="upper right")
     # plt.show()
 
-    # # histogram showing standard deviations across all 8 timestamps of the individual
     # plt.hist(p_values_cpoolintopop_LLR[m], bins=100, label=f"noise multiplier number {m}")
-    # plt.xlabel("p values cpool moved to pop L1")
+    # plt.xlabel("p values cpool moved to pop LLR")
     # plt.ylabel("count of deviations across 100 different range values")
     # plt.legend(loc="upper right")
     # plt.show()
 
-    # histogram showing standard deviations across all 8 timestamps of the individual
     plt.hist((p_values_pop_LLR[m], p_values_pool_LLR[m], p_values_cpoolintopop_LLR[m]), bins=300, label=f"noise multiplier number {m}")
     plt.xlabel("p values pop & pool LLR")
     plt.ylabel("count of deviations across 300 different range values")

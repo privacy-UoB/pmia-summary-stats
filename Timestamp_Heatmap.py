@@ -1,14 +1,13 @@
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from utils import load_timestamp_dataset, LLR, L1, L1_ttest
+from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 from scipy.spatial import distance
 
 # df = df.dropna() # this drops all NaN values from a dataframe?
 
 # load dataset (ensure it's the NaN, i.e. t = new population)
-(pop_timestamps_graph, pool_timestamps_graph, sample_timestamps_graph) = load_timestamp_dataset(withNaN=True)
+pop_timestamps_graph, pool_timestamps_graph, sample_timestamps_graph = load_timestamp_dataset(withNaN=True)
 # pop_timestamps_graph is a list of length 8 timestamps, each containing <=18 individuals
 # pool_timestamps_graph is a list of length 8 timestamps, each containing <=8 individuals
 
@@ -21,10 +20,7 @@ pop_labels = list(pop_timestamps_graph[0]["patient_id"])
 pool_labels = list(pool_timestamps_graph[0]["patient_id"])
 patient_labels = pop_labels + pool_labels # in order as they appear in for loop below
 
-for x, y in zip(pop_timestamps_graph, pool_timestamps_graph):
-    x.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
-    y.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
-
+pop_timestamps_graph, pool_timestamps_graph = drop_timestamp_index(pop_timestamps_graph, pool_timestamps_graph)
 
 timepoint_distance = []
 patient_0_time_0 = (pop_timestamps_graph[0]).iloc[0]

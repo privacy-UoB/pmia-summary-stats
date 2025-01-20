@@ -2,17 +2,13 @@ import numpy as np
 import seaborn as sns 
 import matplotlib.pyplot as plt
 from scipy import stats 
-from sklearn.metrics import roc_auc_score
-from utils import load_timestamp_dataset, LLR, L1, L1_ttest
+from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 
 testing_distribution_fit = True
 
 # load dataset
-(pop_timestamps, pool_timestamps, sample_timestamps) = load_timestamp_dataset()
-
-for x, y in zip(pop_timestamps, pool_timestamps):
-    x.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
-    y.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
+pop_timestamps, pool_timestamps, sample_timestamps = load_timestamp_dataset()
+pop_timestamps, pool_timestamps = drop_timestamp_index(pop_timestamps, pool_timestamps)
 
 # miRNA = np.random.randint(0, 1205)
 

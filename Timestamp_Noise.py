@@ -1,20 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score
-from utils import load_timestamp_dataset, LLR, L1, L1_ttest
+from utils_datasets import load_timestamp_dataset, drop_timestamp_index
+from utils import auc_scores
 
 include_all_timestamps = False # if we wish to create one graph with all 8 timestamps
 
 # load one partitioned dataset (moved from num_orders loop)
-(ti_pop, ti_pool, ti_sample) = load_timestamp_dataset()
+ti_pop, ti_pool, ti_sample = load_timestamp_dataset()
+ti_pop, ti_pool = drop_timestamp_index(ti_pop, ti_pool)
 
-for x, y in zip(ti_pop, ti_pool):
-    x.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
+# for x, y in zip(ti_pop, ti_pool):
     # for row in range(len(x)):
     #     (x.iloc[row]).dropna(inplace=True) # remove NaN rows from the dataframe
     # print(x)
-
-    y.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
     # for row in range(len(y)):
     #     (y.iloc[row]).dropna() # remove NaN rows from the dataframe
 
@@ -56,34 +54,18 @@ for m in multiplier:
     # for loop for numorder lots of train/test, then average at end
     for j in range (num_orders):
 
-        pop_noise = np.random.normal(0, m, pop.shape) #changed from m*sigmaj so it's not tailored variance to each miRNA
+        # the 'noise' increases throughout each of the later timepoints the data is collected from
+        pop_noise = np.random.normal(0, m, pop.shape) # changed from m*sigmaj so it's not tailored variance to each miRNA
         noised_pop = pop + pop_noise
 
         pool_noise = np.random.normal(0, m, pool.shape)
         noised_pool = pool + pool_noise
 
-        # the 'noise' increases throughout each of the later timepoints the data is collected from
-        local_noised_pop = noised_pop
-        local_noised_pool = noised_pool
-        local_pop = pop
-        local_pool = pool
-
-        # get values for L1 & LLR statistics over the noisy stat inputs compared to the 'original' pop & pool
-        pvalue_pop_L1 = L1_ttest(local_noised_pop, local_pop, local_pool)
-        pvalue_pool_L1 = L1_ttest(local_noised_pool, local_pop, local_pool)
-    
-        pvalue_pop_LLR = LLR(local_noised_pop, local_pop, local_pool)
-        pvalue_pool_LLR = LLR(local_noised_pool, local_pop, local_pool)
-
-        # determine the performance of the attack comparing the accuracy of inference to the real data
-        y_true_L1 = np.concatenate((np.zeros(len(pvalue_pop_L1)), np.ones(len(pvalue_pool_L1))))
-        y_score_L1 = np.concatenate((pvalue_pop_L1, pvalue_pool_L1))
-        roc_L1 = roc_auc_score(y_true_L1, y_score_L1)
+        # get performance/accuracy for L1 & LLR statistics over the noisy stat inputs compared to the 'original' pop & pool
+        roc_L1 = auc_scores(noised_pop, noised_pool, pop, pool, p_values=False)
+        roc_LLR = auc_scores(noised_pop, noised_pool, pop, pool, LR=True, p_values=False)
+        
         aucs_L1.append(roc_L1)
-
-        y_true_LLR = np.concatenate((np.zeros(len(pvalue_pop_LLR)), np.ones(len(pvalue_pool_LLR))))
-        y_score_LLR = np.concatenate((pvalue_pop_LLR, pvalue_pool_LLR))
-        roc_LLR = roc_auc_score(y_true_LLR, y_score_LLR)
         aucs_LLR.append(roc_LLR)
 
     # num_order rows of datasets, columns are each timestamp

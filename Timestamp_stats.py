@@ -1,15 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score
-from utils import load_timestamp_dataset, LLR, L1, L1_ttest
+from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 from scipy.spatial import distance
 from itertools import chain
 
 # load dataset
-(pop_timestamps_graph, pool_timestamps_graph, sample_timestamps_graph) = load_timestamp_dataset()
-
-for i in sample_timestamps_graph:
-    i.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
+pop, pool, sample = load_timestamp_dataset()
+pop_timestamps_graph, pool_timestamps_graph, sample_timestamps_graph = drop_timestamp_index(pop, pool, sample)
 
 # cosine similarity better than euclidean distance
 cosine_distances = []
@@ -35,10 +32,8 @@ plt.legend(loc="upper right")
 plt.show()
 
 # create dataset of all 26 diseased individuals
-full_timestamps_graph = []
-for x, y in zip(pop_timestamps_graph, pool_timestamps_graph):
-    x.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
-    y.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
+# full_timestamps_graph = []
+# for x, y in zip(pop_timestamps_graph, pool_timestamps_graph):
     # z = list(chain(x,y))
     # full_timestamps_graph.append(z)
 

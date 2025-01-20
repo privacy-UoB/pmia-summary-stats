@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score
-from utils import load_timestamp_dataset, LLR, L1, L1_ttest
-from scipy.spatial import distance
+from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 
 # Plot the differences between T1-T0 for each individual mirna
 # Do list of timestamp 0 & 1 per patient, then plot one histogram showing diff. Over each mirna.
@@ -10,7 +8,8 @@ from scipy.spatial import distance
 
 
 # load dataset
-(pop_timestamps, pool_timestamps, sample_timestamps) = load_timestamp_dataset()
+pop_timestamps, pool_timestamps, sample_timestamps = load_timestamp_dataset()
+pop_timestamps, pool_timestamps = drop_timestamp_index(pop_timestamps, pool_timestamps)
 
 # timestamp_0 = []
 # timestamp_1 = []
@@ -28,10 +27,6 @@ from scipy.spatial import distance
 
 #     x.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
 #     y.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
-
-for x, y in zip(pop_timestamps, pool_timestamps):
-    x.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
-    y.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
 
 # currently only looking at timestamp 0 and 1
 pop_timestamp0 = pop_timestamps[0]

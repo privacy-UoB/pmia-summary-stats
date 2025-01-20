@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 from scipy import stats
-from sklearn.metrics import roc_auc_score
-from utils import load_timestamp_dataset, LLR, L1, L1_ttest
+from utils_datasets import load_timestamp_dataset, drop_timestamp_index
+from utils import auc_scores, normalise
 
 include_synthetic_noise = True
 include_pvalue_histogram = True
@@ -43,15 +43,13 @@ for j in range (num_orders):
         aucs_syntheticLLR = []
 
     # load new partitioned dataset each time we call num_orders
-    (ti_pop, ti_pool, ti_sample) = load_timestamp_dataset()
+    ti_pop, ti_pool, ti_sample = load_timestamp_dataset()
+    ti_pop, ti_pool = drop_timestamp_index(ti_pop, ti_pool)
 
-    for x, y in zip(ti_pop, ti_pool):
-        x.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
+    # for x, y in zip(ti_pop, ti_pool):
         # for row in range(len(x)):
         #     (x.iloc[row]).dropna(inplace=True) # remove NaN rows from the dataframe
         # print(x)
-
-        y.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
         # for row in range(len(y)):
         #     (y.iloc[row]).dropna() # remove NaN rows from the dataframe
 
@@ -64,30 +62,29 @@ for j in range (num_orders):
 # This isn't working because it's 'a value is trying to be set on a copy of a slice from a DataFrame'?????
         # so why is the above for x, y in zip() working?!?!??
 
+    # normalise over the miRNA values
+    ti_pop, ti_pool = normalise(ti_pop, ti_pool)
+    # currently isn't working... think need to drop column names for normalise then readd
+    # for x, y in zip(ti_pop, ti_pool):
+    #     x, y = normalise(x, y)
+
     # configuring the reference pop & pool to match the dataframe of a particular timepoint
     pop = ti_pop[0]
     pool = ti_pool[0]
 
+    # the 'noise' increases throughout each of the later timepoints the data is collected from
     for t_pop, t_pool in zip(ti_pop, ti_pool):
 
-        # the 'noise' increases throughout each of the later timepoints the data is collected from
-        # local_noised_pop = t_pop
-        # local_noised_pool = t_pool
-        # local_pop = pop
-        # local_pool = pool
+        # get performance/accuracy for L1 & LLR statistics over the noisy stat inputs compared to the 'original' pop & pool
+        roc_L1, pvalue_pop_L1, pvalue_pool_L1 = auc_scores(t_pop, t_pool, pop, pool)
+        roc_LLR, pvalue_pop_LLR, pvalue_pool_LLR = auc_scores(t_pop, t_pool, pop, pool, LR=True)
 
-        # get values for L1 & LLR statistics over the noisy stat inputs compared to the 'original' pop & pool
-        pvalue_pop_L1 = L1_ttest(t_pop, pop, pool)
-        pvalue_pool_L1 = L1_ttest(t_pool, pop, pool)
+        aucs_L1.append(roc_L1)
+        aucs_LLR.append(roc_LLR)
 
         if include_pvalue_histogram:
             p_values_realpop_L1.append(pvalue_pop_L1)
             p_values_realpool_L1.append(pvalue_pool_L1)
-    
-        pvalue_pop_LLR = LLR(t_pop, pop, pool)
-        pvalue_pool_LLR = LLR(t_pool, pop, pool)
-
-        if include_pvalue_histogram:
             p_values_realpop_LLR.append((pvalue_pop_LLR.ravel()))
             p_values_realpool_LLR.append((pvalue_pool_LLR.ravel()))
 
@@ -96,17 +93,6 @@ for j in range (num_orders):
 
         # print("standard deviations.", np.std(local_noised_pop), np.std(local_noised_pool), 
         #       np.std(local_pop), np.std(local_pool))
-
-        # determine the performance of the attack comparing the accuracy of inference to the real data
-        y_true_L1 = np.concatenate((np.zeros(len(pvalue_pop_L1)), np.ones(len(pvalue_pool_L1))))
-        y_score_L1 = np.concatenate((pvalue_pop_L1, pvalue_pool_L1))
-        roc_L1 = roc_auc_score(y_true_L1, y_score_L1)
-        aucs_L1.append(roc_L1)
-
-        y_true_LLR = np.concatenate((np.zeros(len(pvalue_pop_LLR)), np.ones(len(pvalue_pool_LLR))))
-        y_score_LLR = np.concatenate((pvalue_pop_LLR, pvalue_pool_LLR))
-        roc_LLR = roc_auc_score(y_true_LLR, y_score_LLR)
-        aucs_LLR.append(roc_LLR)
 
         if include_synthetic_noise:
             # think about the t_pop noise = np.normal(0, m) that Pascal drew
@@ -210,41 +196,26 @@ for j in range (num_orders):
                 pool_noise = np.reshape(shuffled_pool_diff, local_pool.shape)
                 noised_pool = local_pool + pool_noise
 
-
             # # plot histogram of the timestamp differences vs the modelled synthetic noise added to timestamp0
-            plt.hist((c, np.concatenate((np.ravel(pop_noise), np.ravel(pool_noise)))), bins=50, 
-                    label=(f"differences of timepoints", "selected distribution"))
-            plt.xlabel("difference")
-            plt.ylabel("count")
-            plt.legend(loc="upper right")
-            plt.show()
+            # plt.hist((c, np.concatenate((np.ravel(pop_noise), np.ravel(pool_noise)))), bins=50, 
+            #         label=(f"differences of timepoints", "selected distribution"))
+            # plt.xlabel("difference")
+            # plt.ylabel("count")
+            # plt.legend(loc="upper right")
+            # plt.show()
 
+            # get performance/accuracy for L1 & LLR statistics over the noisy stat inputs compared to the 'original' pop & pool
+            roc_synthL1, pvalue_synthpop_L1, pvalue_synthpool_L1 = auc_scores(noised_pop, noised_pool, pop, pool)
+            roc_synthLLR, pvalue_synthpop_LLR, pvalue_synthpool_LLR = auc_scores(noised_pop, noised_pool, pop, pool, LR=True)
 
-            # get values for L1 & LLR statistics over the noisy stat inputs compared to the 'original' pop & pool
-            pvalue_syntheticpop_L1 = L1_ttest(noised_pop, pop, pool)
-            pvalue_syntheticpool_L1 = L1_ttest(noised_pool, pop, pool)
-
-            if include_pvalue_histogram:
-                p_values_synthpop_L1.append(pvalue_syntheticpop_L1)
-                p_values_synthpool_L1.append(pvalue_syntheticpool_L1)
-        
-            pvalue_syntheticpop_LLR = LLR(noised_pop, pop, pool)
-            pvalue_syntheticpool_LLR = LLR(noised_pool, pop, pool)
+            aucs_syntheticL1.append(roc_synthL1)
+            aucs_syntheticLLR.append(roc_synthLLR)
 
             if include_pvalue_histogram:
-                p_values_synthpop_LLR.append((pvalue_syntheticpop_LLR.ravel()))
-                p_values_synthpool_LLR.append((pvalue_syntheticpool_LLR.ravel()))
-
-            # determine the performance of the attack comparing the accuracy of inference to the real data
-            y_true_syntheticL1 = np.concatenate((np.zeros(len(pvalue_syntheticpop_L1)), np.ones(len(pvalue_syntheticpool_L1))))
-            y_score_syntheticL1 = np.concatenate((pvalue_syntheticpop_L1, pvalue_syntheticpool_L1))
-            roc_syntheticL1 = roc_auc_score(y_true_syntheticL1, y_score_syntheticL1)
-            aucs_syntheticL1.append(roc_syntheticL1)
-
-            y_true_syntheticLLR = np.concatenate((np.zeros(len(pvalue_syntheticpop_LLR)), np.ones(len(pvalue_syntheticpool_LLR))))
-            y_score_syntheticLLR = np.concatenate((pvalue_syntheticpop_LLR, pvalue_syntheticpool_LLR))
-            roc_syntheticLLR = roc_auc_score(y_true_syntheticLLR, y_score_syntheticLLR)
-            aucs_syntheticLLR.append(roc_syntheticLLR)
+                p_values_synthpop_L1.append(pvalue_synthpop_L1)
+                p_values_synthpool_L1.append(pvalue_synthpool_L1)
+                p_values_synthpop_LLR.append((pvalue_synthpop_LLR.ravel()))
+                p_values_synthpool_LLR.append((pvalue_synthpool_LLR.ravel()))
 
     # num_order rows of datasets, columns are each timestamp
     if len(aucs_L1) >0:
@@ -277,7 +248,7 @@ ax.plot(range(len(ti_pool)), auc_LLR, "-r", linewidth=2.0, label="LLR")
 if include_synthetic_noise:
     ax.plot(range(len(auc_syntheticL1)), auc_syntheticL1, "-g", linewidth=2.0, label="L1")
     ax.plot(range(len(auc_syntheticLLR)), auc_syntheticLLR, "-y", linewidth=2.0, label="LLR")
-ax.set_ylim([0.3,1]) # enables comparable auc scores between L1 and LLR
+ax.set_ylim([0.3,1.1]) # enables comparable auc scores between L1 and LLR
 
 plt.xlabel("timestamp")
 plt.ylabel("AUC scores")

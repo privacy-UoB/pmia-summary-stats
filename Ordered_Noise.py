@@ -1,9 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from sklearn.metrics import roc_auc_score
-from utils import load_dataset, LLR, L1, L1_ttest, L1_threshold, LLR_threshold, ground_truth, D3
-
+from utils_datasets import load_dataset, D3, drop_dataset_index
+from utils import auc_scores
 
 # paper: the demonstrated graphs showing roc curves
     # 1st: 50 subsets of n/1049 different individuals (n = 35, 65, 124)
@@ -11,13 +10,9 @@ from utils import load_dataset, LLR, L1, L1_ttest, L1_threshold, LLR_threshold, 
 
 # load dataset
 pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
+pop_rpool, pop_cpool, rpool, cpool = drop_dataset_index(pop_rpool, pop_cpool, rpool, cpool)
 
-pop_rpool = pop_rpool.drop(columns="diseases")
-pop_cpool = pop_cpool.drop(columns="diseases")
 pop = pop_rpool # make pop configurable
-
-rpool = rpool.drop(columns="diseases")
-cpool = cpool.drop(columns="diseases")
 pool = rpool # make pool configurable
 
 sigma_j = np.std(pop, axis=0) # this is doing it over all the columns (miRNAs)
@@ -73,7 +68,6 @@ for count, m in enumerate(multiplier):
             current_shuffled_list = shuffled_lists[j]
             selected_miRNAs = current_shuffled_list[:i]
 
-
             selected_nonneg_noised_pop = nonneg_noised_pop_matrix[j][count]
             local_noised_pop = selected_nonneg_noised_pop[selected_miRNAs]
 
@@ -83,24 +77,11 @@ for count, m in enumerate(multiplier):
             local_pop = pop[selected_miRNAs]
             local_pool = pool[selected_miRNAs]
 
+            # Query: should these actually be local_noised_pop, local_noised_pool, pop, pool?
+            roc_L1 = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, p_values=False)
+            roc_LLR = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, LR=True, p_values=False)
 
-            pvalue_pop_L1 = L1_ttest(local_noised_pop, local_pop, local_pool)
-            pvalue_pool_L1 = L1_ttest(local_noised_pool, local_pop, local_pool)
-
-            pvalue_pop_LLR = LLR(local_noised_pop, local_pop, local_pool)
-            pvalue_pool_LLR = LLR(local_noised_pool, local_pop, local_pool)
-
-
-            y_true_L1 = np.concatenate((np.zeros(len(pvalue_pop_L1)), np.ones(len(pvalue_pool_L1))))
-            y_score_L1 = np.concatenate((pvalue_pop_L1, pvalue_pool_L1))
-            roc_L1 = roc_auc_score(y_true_L1, y_score_L1)
-
-            aucs_L1.append(roc_L1)
-
-            y_true_LLR = np.concatenate((np.zeros(len(pvalue_pop_LLR)), np.ones(len(pvalue_pool_LLR))))
-            y_score_LLR = np.concatenate((pvalue_pop_LLR, pvalue_pool_LLR))
-            roc_LLR = roc_auc_score(y_true_LLR, y_score_LLR)
-            
+            aucs_L1.append(roc_L1)            
             aucs_LLR.append(roc_LLR)
 
         if len(aucs_L1) >0:
@@ -112,7 +93,6 @@ for count, m in enumerate(multiplier):
     noise_fraction_L1.append(auc_L1)
     noise_fraction_LLR.append(auc_LLR)
 
-
 # print(f'AUC score:{auc_L1}')
 # print(f'AUC score:{auc_LLR}')
 
@@ -120,8 +100,8 @@ for count, m in enumerate(multiplier):
 fig, ax = plt.subplots()
 
 for l in range(len(multiplier)):
-    ax.plot(num_miRNAs, noise_fraction_L1[l], linewidth=2.0, label=f"L1 {l}")
-    # ax.plot(num_miRNAs, noise_fraction_LLR[l], linewidth=2.0, label=f"LLR {l}")
+    # ax.plot(num_miRNAs, noise_fraction_L1[l], linewidth=2.0, label=f"L1 {l}")
+    ax.plot(num_miRNAs, noise_fraction_LLR[l], linewidth=2.0, label=f"LLR {l}")
 ax.invert_xaxis()
 ax.set_ylim([0.5,1]) # enables comparable auc scores between L1 and LLR
 plt.xlabel("number MiRNAs")

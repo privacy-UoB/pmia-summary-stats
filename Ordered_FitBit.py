@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.model_selection import ShuffleSplit
-from sklearn.metrics import roc_auc_score, roc_curve
-from utils import load_FitBit_dataset, LLR, L1, L1_ttest
+from sklearn.metrics import roc_curve
+from utils_datasets import load_FitBit_dataset
+from utils import auc_scores
 
 # pop, pool = load_FitBit_dataset()
 # print("fitbit pop", pop[1], "fitbit pool", pool[3])
@@ -30,36 +30,23 @@ for j in range (num_orders):
     pool = random_pool[0]
 
     iterations = max(len(pop), len(pool))
-
-
     for i in range(iterations):
 
         local_noised_pop = population[i]
-        local_noised_pool = random_pool[i]
-        local_pop = pop
-        local_pool = pool
+        local_noised_pool = random_pool[i]        
 
+        roc_L1, pvalue_pop_L1, pvalue_pool_L1 = auc_scores(local_noised_pop, local_noised_pool, pop, pool)
+        roc_LLR, pvalue_pop_LLR, pvalue_pool_LLR = auc_scores(local_noised_pop, local_noised_pool, pop, pool, LR=True)
 
-        pvalue_pop_L1 = L1_ttest(local_noised_pop, local_pop, local_pool)
-        pvalue_pool_L1 = L1_ttest(local_noised_pool, local_pop, local_pool)
-    
-        pvalue_pop_LLR = LLR(local_noised_pop, local_pop, local_pool)
-        pvalue_pool_LLR = LLR(local_noised_pool, local_pop, local_pool)
-
-
-        y_true_L1 = np.concatenate((np.zeros(len(pvalue_pop_L1)), np.ones(len(pvalue_pool_L1))))
-        y_score_L1 = np.concatenate((pvalue_pop_L1, pvalue_pool_L1))
-
-        roc_L1 = roc_auc_score(y_true_L1, y_score_L1)
         aucs_L1.append(roc_L1)
-        # curve_L1 = roc_curve(y_true_L1, y_score_L1))
+        # y_true_L1 = np.concatenate((np.zeros(len(pvalue_pop_L1)), np.ones(len(pvalue_pool_L1))))
+        # y_score_L1 = np.concatenate((pvalue_pop_L1, pvalue_pool_L1))
+        # curve_L1 = roc_curve(y_true_L1, y_score_L1)
         # roc_curves_L1.append(curve_L1)
 
-        y_true_LLR = np.concatenate((np.zeros(len(pvalue_pop_LLR)), np.ones(len(pvalue_pool_LLR))))
-        y_score_LLR = np.concatenate((pvalue_pop_LLR, pvalue_pool_LLR))
-
-        roc_LLR = roc_auc_score(y_true_LLR, y_score_LLR)
         aucs_LLR.append(roc_LLR)
+        # y_true_LLR = np.concatenate((np.zeros(len(pvalue_pop_LLR)), np.ones(len(pvalue_pool_LLR))))
+        # y_score_LLR = np.concatenate((pvalue_pop_LLR, pvalue_pool_LLR))
         # curve_LLR = roc_curve(y_true_LLR, y_score_LLR)
         # roc_curves_LLR.append(curve_LLR)
 
