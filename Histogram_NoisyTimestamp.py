@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
-from utils import auc_scores
+from utils import auc_scores, Gaussian_noise
 
 # load dataset
 ti_pop, ti_pool, ti_sample = load_timestamp_dataset()
@@ -16,37 +16,24 @@ sigma_j = np.std(pop, axis=0) #this is doing it over all the columns (miRNAs)
 # multiplier = np.arange(0, 20, 0.1)
 multiplier = [0, 1, 2, 3] # fractions of standard deviation applied to the dataset
 
-aucs_L1 = []
-aucs_LLR = []
 p_values_pop_L1 = []
 p_values_pool_L1 = []
 p_values_pop_LLR = []
 p_values_pool_LLR = []
 
+# the 'noise' increases throughout each of the multipliers
 for m in multiplier:
+    deviation = m # not tailored variance to each miRNA; otherwise replace m with m * sigma_j
+    noisy_pop, noisy_pool = Gaussian_noise(pop, pool, 0, deviation)
     
-    pop_noise = np.random.normal(0, m, pop.shape) # not tailored variance to each miRNA
-    # pop_noise = np.random.normal(0, m * sigma_j, pop.shape)
-    noised_pop = pop + pop_noise
-
-    pool_noise = np.random.normal(0, m, pool.shape) # not tailored variance to each miRNA
-    # pool_noise = np.random.normal(0, m * sigma_j, pool.shape)
-    noised_pool = pool + pool_noise
-    
-    # the 'noise' increases throughout each of the multipliers
-    roc_L1, pvalue_pop_L1, pvalue_pool_L1 = auc_scores(noised_pop, noised_pool, pop, pool)
-    roc_LLR, pvalue_pop_LLR, pvalue_pool_LLR = auc_scores(noised_pop, noised_pool, pop, pool, LR=True)
+    roc_L1, pvalue_pop_L1, pvalue_pool_L1 = auc_scores(noisy_pop, noisy_pool, pop, pool)
+    roc_LLR, pvalue_pop_LLR, pvalue_pool_LLR = auc_scores(noisy_pop, noisy_pool, pop, pool, LR=True)
 
     p_values_pop_L1.append(pvalue_pop_L1)
     p_values_pool_L1.append(pvalue_pool_L1)
-
     p_values_pop_LLR.append((pvalue_pop_LLR.ravel()))
     p_values_pool_LLR.append((pvalue_pool_LLR.ravel()))
-
-    aucs_L1.append(roc_L1)
-    aucs_LLR.append(roc_LLR)
         
-
 # histogram showing standard deviations across all 8 timestamps of the individual
 for m in range(len(multiplier)):
     # L1

@@ -140,6 +140,19 @@ def auc_scores(victim_pop, victim_pool, pop, pool, LR=False, p_values=True):
     scores = ((aucs, pvalue_pop, pvalue_pool) if p_values==True else aucs)
     return scores
 
+def Gaussian_noise(pop, pool, mean, deviation, clip=False, mean2=None, deviation2=None):
+    pop_noise = np.random.normal(mean, deviation, pop.shape)
+    pool_noise = (np.random.normal(mean, deviation, pool.shape)) if deviation2 is None else (np.random.normal(mean2, deviation2, pool.shape))
+
+    noisy_pop = pop + pop_noise
+    noisy_pool = pool + pool_noise
+
+    nonneg_noisy_pop = np.clip(noisy_pop, 0, None)
+    nonneg_noisy_pool = np.clip(noisy_pool, 0, None)
+
+    result = ((noisy_pop, noisy_pool) if clip==False else (nonneg_noisy_pop, nonneg_noisy_pool))
+    return result
+
 # everything below is the fallback for roc_auc_score
 def L1_threshold(pop, pool, victim_pop=None, victim_pool=None):
     pvalue_pop = np.ravel(L1_ttest(pop if victim_pop is None else victim_pop, pop, pool))

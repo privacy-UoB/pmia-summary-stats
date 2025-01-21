@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import random
 from scipy import stats
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
-from utils import auc_scores, normalise
+from utils import auc_scores, normalise, Gaussian_noise
 
 include_synthetic_noise = True
 include_pvalue_histogram = True
@@ -124,10 +124,7 @@ for j in range (num_orders):
                 skew1 = stats.skew(local_noised_pop, axis=0) # skew_j of miRNAs for each pop timestamp
                 skew2 = stats.skew(local_noised_pool, axis=0) # skew_j of miRNAs for each pool timestamp
 
-                pop_noise = np.random.normal(a1, m1, local_pop.shape)
-                noised_pop = local_pop + pop_noise
-                pool_noise = np.random.normal(a2, m2, local_pool.shape)
-                noised_pool = local_pool + pool_noise
+                noisy_pop, noisy_pool = Gaussian_noise(local_pop, local_pool, a1, m1, mean2=a2, deviation2=m2)
 
                 skew_test = stats.skewtest(c, axis=0)
                 print(skew_test, skew1, skew2)
@@ -135,15 +132,12 @@ for j in range (num_orders):
             if selected_distribution == 1: # shifted Gaussian
                 # when creating local_noised_pop by adding to local_pop, you must ensure the distribution is shifted
                 # ensure mean/variance are tailored to each miRNA for all 26 patients
-                shifted_mean_pop = np.mean(pop_diff, axis=0)
-                shifted_mean_pool = np.mean(pool_diff, axis=0)
-                shifted_variance_pop = np.std(pop_diff, axis=0)
-                shifted_variance_pool = np.std(pool_diff, axis=0)
+                shifted_a1 = np.mean(pop_diff, axis=0)
+                shifted_a2 = np.mean(pool_diff, axis=0)
+                shifted_m1 = np.std(pop_diff, axis=0)
+                shifted_m2 = np.std(pool_diff, axis=0)
 
-                pop_noise = np.random.normal(shifted_mean_pop, shifted_variance_pop, local_pop.shape)
-                noised_pop = local_pop + pop_noise
-                pool_noise = np.random.normal(shifted_mean_pool, shifted_variance_pool, local_pool.shape)
-                noised_pool = local_pool + pool_noise
+                noisy_pop, noisy_pool = Gaussian_noise(local_pop, local_pool, shifted_a1, shifted_m1, mean2=shifted_a2, deviation2=shifted_m2)
 
             if selected_distribution == 2: # skewed normal
                 # https://stackoverflow.com/questions/5884768/skew-normal-distribution-in-scipy?rq=3
@@ -157,11 +151,11 @@ for j in range (num_orders):
 
                 unshaped_pop_noise = stats.skewnorm.pdf(x1, args=(a1, loc1, scale1))
                 pop_noise = np.reshape(unshaped_pop_noise, (len(local_pop), 1205))
-                noised_pop = local_pop + pop_noise
+                noisy_pop = local_pop + pop_noise
 
                 unshaped_pool_noise = stats.skewnorm.pdf(x2, args=(a2, loc2, scale2))
                 pool_noise = np.reshape(unshaped_pool_noise, (len(local_pool), 1205))
-                noised_pool = local_pool + pool_noise
+                noisy_pool = local_pool + pool_noise
                 
             if selected_distribution == 3: # skewed Cauchy
                 # from a brief search this seems to be the best to model a big 'spike' at 0
@@ -174,7 +168,7 @@ for j in range (num_orders):
                 pop_maximum = (np.std(unshaped_pop_noise))*(np.max(local_pop))
                 clipped_pop_noise = np.clip(unshaped_pop_noise, pop_minimum, pop_maximum)
                 pop_noise = np.reshape(clipped_pop_noise, (len(local_pop), 1205))
-                noised_pop = local_pop + pop_noise
+                noisy_pop = local_pop + pop_noise
 
                 unshaped_pool_noise = (stats.skewcauchy(a=a2, loc=loc2, scale=scale2).rvs(size=(len(local_pool)*1205)))
                 # unshaped_pool_noise = (stats.skewcauchy.rvs(a=a2, loc=loc2, scale=scale2, size=(len(local_pool)*1205)))
@@ -182,19 +176,19 @@ for j in range (num_orders):
                 pool_maximum = (np.std(unshaped_pool_noise))*(np.max(local_pool))
                 clipped_pool_noise = np.clip(unshaped_pool_noise, pool_minimum, pool_maximum)
                 pool_noise = np.reshape(clipped_pool_noise, (len(local_pool), 1205))
-                noised_pool = local_pool + pool_noise
+                noisy_pool = local_pool + pool_noise
 
             if selected_distribution == 4: # sanity check (samples from real dataset)
                 # Instead of synthetic distribution, sample differences from real timepoints and run - sanity check
                 shuffled_pop_diff = list(pop_diff)
                 random.shuffle(shuffled_pop_diff)
                 pop_noise = np.reshape(shuffled_pop_diff, local_pop.shape)
-                noised_pop = local_pop + pop_noise
+                noisy_pop = local_pop + pop_noise
 
                 shuffled_pool_diff = list(pool_diff)
                 random.shuffle(shuffled_pool_diff)
                 pool_noise = np.reshape(shuffled_pool_diff, local_pool.shape)
-                noised_pool = local_pool + pool_noise
+                noisy_pool = local_pool + pool_noise
 
             # # plot histogram of the timestamp differences vs the modelled synthetic noise added to timestamp0
             # plt.hist((c, np.concatenate((np.ravel(pop_noise), np.ravel(pool_noise)))), bins=50, 
@@ -205,8 +199,8 @@ for j in range (num_orders):
             # plt.show()
 
             # get performance/accuracy for L1 & LLR statistics over the noisy stat inputs compared to the 'original' pop & pool
-            roc_synthL1, pvalue_synthpop_L1, pvalue_synthpool_L1 = auc_scores(noised_pop, noised_pool, pop, pool)
-            roc_synthLLR, pvalue_synthpop_LLR, pvalue_synthpool_LLR = auc_scores(noised_pop, noised_pool, pop, pool, LR=True)
+            roc_synthL1, pvalue_synthpop_L1, pvalue_synthpool_L1 = auc_scores(noisy_pop, noisy_pool, pop, pool)
+            roc_synthLLR, pvalue_synthpop_LLR, pvalue_synthpool_LLR = auc_scores(noisy_pop, noisy_pool, pop, pool, LR=True)
 
             aucs_syntheticL1.append(roc_synthL1)
             aucs_syntheticLLR.append(roc_synthLLR)

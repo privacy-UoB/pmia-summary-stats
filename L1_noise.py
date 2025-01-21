@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from utils_datasets import load_dataset, D3, drop_dataset_index
-from utils import auc_scores, fpr_power, L1_threshold
+from utils import auc_scores, Gaussian_noise, fpr_power, L1_threshold
 
 # load dataset
 pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
@@ -63,22 +63,15 @@ for m in multiplier:
     aucs_LLR = []
 
     for j in range (40):
-        pop_noise = np.random.normal(0, m, pop.shape) # make this A LOT bigger, then plot on np.logspace scale
-        pool_noise = np.random.normal(0, m, pool.shape)
-        # pop_noise = np.random.normal(0, m * sigma_j, pop.shape)
-        # pool_noise = np.random.normal(0, m * sigma_j, pool.shape)
+        # make deviation A LOT bigger, then plot on np.logspace scale
+        deviation = m # not tailored variance to each miRNA; otherwise replace m with m * sigma_j
+        nonneg_noisy_pop, nonneg_noisy_pool = Gaussian_noise(pop, pool, 0, deviation, clip=True)
 
-        noised_pop = pop + pop_noise
-        nonneg_pop_noise = np.clip(noised_pop, 0, None)
+        roc_L1, pvalue_pop_L1, pvalue_pool_L1 = auc_scores(nonneg_noisy_pop, nonneg_noisy_pool, pop, pool)
+        roc_LLR, pvalue_pop_LLR, pvalue_pool_LLR = auc_scores(nonneg_noisy_pop, nonneg_noisy_pool, pop, pool, LR=True)
 
-        noised_pool = pool + pool_noise
-        nonneg_pool_noise = np.clip(noised_pool, 0, None)
-
-        roc_L1, pvalue_pop_L1, pvalue_pool_L1 = auc_scores(nonneg_pop_noise, nonneg_pool_noise, pop, pool)
-        roc_LLR, pvalue_pop_LLR, pvalue_pool_LLR = auc_scores(nonneg_pop_noise, nonneg_pool_noise, pop, pool, LR=True)
-
-        # fpr, power = fpr_power(pop, pool, pvalue_pop_L1, pvalue_pool_L1, victim_pop=nonneg_pop_noise, victim_pool=nonneg_pool_noise)
-        # print(L1_threshold(pop, pool, nonneg_pop_noise, nonneg_pool_noise))
+        # fpr, power = fpr_power(pop, pool, pvalue_pop_L1, pvalue_pool_L1, victim_pop=nonneg_noisy_pop, victim_pool=nonneg_noisy_pool)
+        # print(L1_threshold(pop, pool, nonneg_noisy_pop, nonneg_noisy_pool))
 
         aucs_L1.append(roc_L1)
         aucs_LLR.append(roc_LLR)

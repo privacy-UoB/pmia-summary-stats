@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
-from utils import auc_scores
+from utils import auc_scores, Gaussian_noise
 
 include_all_timestamps = False # if we wish to create one graph with all 8 timestamps
 
@@ -53,17 +53,13 @@ for m in multiplier:
 
     # for loop for numorder lots of train/test, then average at end
     for j in range (num_orders):
-
-        # the 'noise' increases throughout each of the later timepoints the data is collected from
-        pop_noise = np.random.normal(0, m, pop.shape) # changed from m*sigmaj so it's not tailored variance to each miRNA
-        noised_pop = pop + pop_noise
-
-        pool_noise = np.random.normal(0, m, pool.shape)
-        noised_pool = pool + pool_noise
+    # the 'noise' increases throughout each of the later timepoints the data is collected from
+        deviation = m # changed from m * sigmaj so it's not tailored variance to each miRNA
+        noisy_pop, noisy_pool = Gaussian_noise(pop, pool, 0, deviation)
 
         # get performance/accuracy for L1 & LLR statistics over the noisy stat inputs compared to the 'original' pop & pool
-        roc_L1 = auc_scores(noised_pop, noised_pool, pop, pool, p_values=False)
-        roc_LLR = auc_scores(noised_pop, noised_pool, pop, pool, LR=True, p_values=False)
+        roc_L1 = auc_scores(noisy_pop, noisy_pool, pop, pool, p_values=False)
+        roc_LLR = auc_scores(noisy_pop, noisy_pool, pop, pool, LR=True, p_values=False)
         
         aucs_L1.append(roc_L1)
         aucs_LLR.append(roc_LLR)

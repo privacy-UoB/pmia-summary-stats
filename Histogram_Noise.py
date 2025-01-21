@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from utils_datasets import load_dataset, D3, split_pool, drop_dataset_index
-from utils import auc_scores, LLR, L1_ttest
+from utils import auc_scores, Gaussian_noise, LLR, L1_ttest
 
 # load dataset
 pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
@@ -23,8 +23,6 @@ multiplier = [0, 0.25, 0.5, 0.75, 1] # fractions of standard deviation applied t
 # multiplier = np.logspace(0, 15, base=2) # used for standard noise values
 # multiplier = np.arange(0, 8, 0.04) # sufficient for m * sigma_j
 
-aucs_L1 = []
-aucs_LLR = []
 p_values_pop_L1 = []
 p_values_pool_L1 = []
 p_values_cpoolintopop_L1 = []
@@ -33,27 +31,18 @@ p_values_pool_LLR = []
 p_values_cpoolintopop_LLR = []
 
 for m in multiplier:
-    
-    # pop_noise = np.random.normal(0, m, pop.shape) #make this A LOT bigger, then plot on np.logspace scale
-    # pool_noise = np.random.normal(0, m, pool.shape)
-    # cpoolintopop_noise = np.random.normal(0, m, cpool_into_pop.shape)
-    pop_noise = np.random.normal(0, m * sigma_j, pop.shape)
-    pool_noise = np.random.normal(0, m * sigma_j, pool.shape)
-    cpoolintopop_noise = np.random.normal(0, m * sigma_j, cpool_into_pop.shape)
+    # make deviation A LOT bigger, then plot on np.logspace scale
+    deviation = m * sigma_j # sometimes replace m * sigma_j with m
+    nonneg_noisy_pop, nonneg_noisy_pool = Gaussian_noise(pop, pool, 0, deviation, clip=True)
 
-    noised_pop = pop + pop_noise
-    nonneg_pop_noise = np.clip(noised_pop, 0, None)
+    cpoolintopop_noise = np.random.normal(0, deviation, cpool_into_pop.shape)
+    noisy_cpoolintopop = cpool_into_pop + cpoolintopop_noise
+    nonneg_noisy_cpoolintopop = np.clip(noisy_cpoolintopop, 0, None)
 
-    noised_pool = pool + pool_noise
-    nonneg_pool_noise = np.clip(noised_pool, 0, None)
-
-    noised_cpoolintopop = cpool_into_pop + cpoolintopop_noise
-    nonneg_cpoolintopop_noise = np.clip(noised_cpoolintopop, 0, None)
-
-    roc_L1, pvalue_pop_L1, pvalue_pool_L1 = auc_scores(nonneg_pop_noise, nonneg_pool_noise, pop, pool)
-    roc_LLR, pvalue_pop_LLR, pvalue_pool_LLR = auc_scores(nonneg_pop_noise, nonneg_pool_noise, pop, pool, LR=True)
-    pvalue_cpoolintopop_L1 = L1_ttest(nonneg_cpoolintopop_noise, pop, pool)
-    pvalue_cpoolintopop_LLR = LLR(nonneg_cpoolintopop_noise, pop, pool)
+    roc_L1, pvalue_pop_L1, pvalue_pool_L1 = auc_scores(nonneg_noisy_pop, nonneg_noisy_pool, pop, pool)
+    roc_LLR, pvalue_pop_LLR, pvalue_pool_LLR = auc_scores(nonneg_noisy_pop, nonneg_noisy_pool, pop, pool, LR=True)
+    pvalue_cpoolintopop_L1 = L1_ttest(nonneg_noisy_cpoolintopop, pop, pool)
+    pvalue_cpoolintopop_LLR = LLR(nonneg_noisy_cpoolintopop, pop, pool)
 
     p_values_pop_L1.append(pvalue_pop_L1)
     p_values_pool_L1.append(pvalue_pool_L1)
@@ -62,9 +51,6 @@ for m in multiplier:
     p_values_pop_LLR.append((pvalue_pop_LLR.ravel()))
     p_values_pool_LLR.append((pvalue_pool_LLR.ravel()))
     p_values_cpoolintopop_LLR.append((pvalue_cpoolintopop_LLR.ravel()))
-
-    aucs_L1.append(roc_L1)
-    aucs_LLR.append(roc_LLR)
         
 # histogram showing standard deviations across all 8 timestamps of the individual
 for m in range(len(multiplier)):

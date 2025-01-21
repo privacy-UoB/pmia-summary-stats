@@ -21,8 +21,6 @@ miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", 
 current_miRNA_list = list(miRNAs)
 random.shuffle(current_miRNA_list)
 
-aucs_L1 = []
-aucs_LLR = []
 p_values_pop_L1 = []
 p_values_pool_L1 = []
 p_values_pop_LLR = []
@@ -43,9 +41,6 @@ for i in range(2,len(miRNAs),2): # MiRNAs range from 1 to 466 in paper
     p_values_pool_L1.append(pvalue_pool_L1)
     p_values_pop_LLR.append((pvalue_pop_LLR.ravel()))
     p_values_pool_LLR.append((pvalue_pool_LLR.ravel()))
-
-    aucs_L1.append(roc_L1)
-    aucs_LLR.append(roc_LLR)
         
 flat_p_values_pop_L1 = list(itertools.chain.from_iterable(p_values_pop_L1))
 flat_p_values_pool_L1 = list(itertools.chain.from_iterable(p_values_pool_L1))

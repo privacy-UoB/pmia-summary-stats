@@ -9,16 +9,13 @@ ti_pop, ti_pool = drop_timestamp_index(ti_pop, ti_pool)
 pop = ti_pop[0] # make pop configurable
 pool = ti_pool[0] # make pool configurable
 
-aucs_L1 = []
-aucs_LLR = []
 p_values_pop_L1 = []
 p_values_pool_L1 = []
 p_values_pop_LLR = []
 p_values_pool_LLR = []
 
+# the 'noise' increases throughout each of the later timepoints the data is collected from
 for t_pop, t_pool in zip(ti_pop, ti_pool):
-    
-    # the 'noise' increases throughout each of the later timepoints the data is collected from
     roc_L1, pvalue_pop_L1, pvalue_pool_L1 = auc_scores(t_pop, t_pool, pop, pool)
     roc_LLR, pvalue_pop_LLR, pvalue_pool_LLR = auc_scores(t_pop, t_pool, pop, pool, LR=True)
 
@@ -26,9 +23,6 @@ for t_pop, t_pool in zip(ti_pop, ti_pool):
     p_values_pool_L1.append(pvalue_pool_L1)
     p_values_pop_LLR.append((pvalue_pop_LLR.ravel()))
     p_values_pool_LLR.append((pvalue_pool_LLR.ravel()))
-
-    aucs_L1.append(roc_L1)
-    aucs_LLR.append(roc_LLR)
 
 # histogram showing standard deviations across all 8 timestamps of the individual
 for m in range(len(ti_pop)):

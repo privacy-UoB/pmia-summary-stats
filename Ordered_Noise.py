@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 from utils_datasets import load_dataset, D3, drop_dataset_index
-from utils import auc_scores
+from utils import auc_scores, Gaussian_noise
 
 # paper: the demonstrated graphs showing roc curves
     # 1st: 50 subsets of n/1049 different individuals (n = 35, 65, 124)
@@ -35,17 +35,11 @@ for j in range (num_orders):
 
     # create a noisy matrix of m columns with num_order rows 
     for m in multiplier:
-        # broadcast the deviation over all 466 miRNAs to the [1049 x 466] pop shape
-        pop_noise = np.random.normal(0, m * sigma_j, pop.shape)
-        noised_pop = pop_noise + pop
-        nonneg_noised_pop = np.clip(noised_pop, 0, None)
-        nonneg_noised_pop_row.append(nonneg_noised_pop)
-
-        # broadcast the deviation over all 466 miRNAs to the [n x 466] pool shape
-        pool_noise = np.random.normal(0, m * sigma_j, pool.shape)
-        noised_pool = pool_noise + pool
-        nonneg_noised_pool = np.clip(noised_pool, 0, None)
-        nonneg_noised_pool_row.append(nonneg_noised_pool)
+        # broadcast the deviation over all 466 miRNAs to the [1049 x 466] pop & pool shape
+        nonneg_noisy_pop, nonneg_noisy_pool = Gaussian_noise(pop, pool, 0, (m * sigma_j), clip=True)
+        
+        nonneg_noised_pop_row.append(nonneg_noisy_pop)
+        nonneg_noised_pool_row.append(nonneg_noisy_pool)
 
     nonneg_noised_pop_matrix.append(nonneg_noised_pop_row)
     nonneg_noised_pool_matrix.append(nonneg_noised_pool_row)
