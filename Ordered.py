@@ -78,6 +78,7 @@ fig, ax = plt.subplots()
 ax.plot(num_miRNAs, auc_L1, "-b", linewidth=2.0, label="L1")
 ax.plot(num_miRNAs, auc_LLR, "-r", linewidth=2.0, label="LLR")
 ax.invert_xaxis()
+ax.set_ylim([0.5,1]) # enables comparable auc scores between L1 and LLR
 plt.xlabel("number MiRNAs")
 plt.ylabel("AUC scores")
 plt.legend(loc="upper right")

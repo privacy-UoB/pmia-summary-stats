@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import random
 from sklearn.model_selection import ShuffleSplit
+from scipy.stats import pearsonr
+from itertools import combinations
 
 # listing all 19 case pools for GSE61741 dataset
 D1 = "disease: Wilms Tumor"
@@ -215,6 +217,89 @@ def drop_timestamp_index(pop, pool, sample=None):
         result = (pop, pool, sample)
 
     return result
+
+# https://stackoverflow.com/questions/33997753/calculating-pairwise-correlation-among-all-columns
+def independent(pop_timestamps, pool_timestamps, separate_timestamps=False, print_independent_miRNAs=False, correlation=None):
+    independent_miRNAs_pertime = []
+    threshold = 0.9 if correlation is None else correlation
+
+    if separate_timestamps == False:
+        alltimes_combined_df = pd.DataFrame(columns=pop_timestamps[0].columns, index=[0])
+        alltimes_combined_df = alltimes_combined_df.iloc[1:]
+
+        for t_pop, t_pool in zip(pop_timestamps, pool_timestamps):
+            combined_df = pd.concat([t_pop, t_pool], ignore_index=True)
+            alltimes_combined_df = pd.concat([alltimes_combined_df, combined_df], ignore_index=True)
+        smaller_combined_df = combined_df.iloc[:,:]
+
+        correlations = {}
+        columns = smaller_combined_df.columns.tolist()
+        random.shuffle(columns)
+        independent_miRNAs = columns.copy()
+
+        for col1, col2 in combinations(columns, 2):
+            a, b = pearsonr(smaller_combined_df.loc[:, col1], smaller_combined_df.loc[:, col2])
+            correlations[col1 + '___' + col2] = pearsonr(smaller_combined_df.loc[:, col1], smaller_combined_df.loc[:, col2])
+
+            if any(col1 == x for x in independent_miRNAs):
+                if (np.abs(a) > threshold):
+                    independent_miRNAs.remove(col1)
+
+        result = pd.DataFrame.from_dict(correlations, orient='index')
+        result.columns = ['PCC', 'p-value']
+
+        if print_independent_miRNAs == True:
+            print(result.sort_index())
+            print(independent_miRNAs, len(independent_miRNAs))
+        independent_columns = independent_miRNAs
+
+        pop_dataframe = []
+        pool_dataframe = []
+        for t_pop, t_pool in zip(pop_timestamps, pool_timestamps):
+            independent_pop = t_pop.loc[:, independent_miRNAs]
+            independent_pool = t_pool.loc[:, independent_miRNAs]
+            pop_dataframe.append(independent_pop)
+            pool_dataframe.append(independent_pool)
+                
+    else:
+        pop_dataframe = []
+        pool_dataframe = []
+        for t_pop, t_pool in zip(pop_timestamps, pool_timestamps):
+            combined_df = pd.concat([t_pop, t_pool], ignore_index=True)
+            smaller_combined_df = combined_df.iloc[:,:120]
+
+            correlations = {}
+            columns = smaller_combined_df.columns.tolist()
+            random.shuffle(columns)
+            independent_miRNAs = columns.copy()
+
+            for col1, col2 in combinations(columns, 2):
+                a, b = pearsonr(smaller_combined_df.loc[:, col1], smaller_combined_df.loc[:, col2])
+                correlations[col1 + '___' + col2] = pearsonr(smaller_combined_df.loc[:, col1], smaller_combined_df.loc[:, col2])
+
+                if any(col1 == x for x in independent_miRNAs):
+                    if (np.abs(a) > threshold):
+                        independent_miRNAs.remove(col1)
+                    # independent_miRNAs.remove(col1) if (np.abs(correlations[0]) > 0.3) else continue
+
+            result = pd.DataFrame.from_dict(correlations, orient='index')
+            result.columns = ['PCC', 'p-value']
+
+            independent_miRNAs_pertime.append(independent_miRNAs)
+            independent_miRNAs_pertime.append(len(independent_miRNAs))
+
+            independent_pop = t_pop.loc[:, independent_miRNAs]
+            independent_pool = t_pool.loc[:, independent_miRNAs]
+            pop_dataframe.append(independent_pop)
+            pool_dataframe.append(independent_pool)
+
+            if print_independent_miRNAs == True:
+                print(result.sort_index())
+        if print_independent_miRNAs == True:
+            print (independent_miRNAs_pertime)
+        independent_columns = independent_miRNAs_pertime
+
+    return(pop_dataframe, pool_dataframe, result, independent_columns)
 
 def load_FitBit_dataset(pool_size=None):
 

@@ -23,8 +23,8 @@ for i in range(10,470,10):
         # -> zip[(pop(50),rpool(50),cpool(50)), (pop(100), rpool(100), cpool(100)), ..., (pop(1000), rpool(1000), cpool(1000))]
 
         pop_rpool, pop_cpool, rpool, cpool = drop_dataset_index(rpop, cpop, rpool, cpool)
-        pop = pop_cpool # make pop configurable
-        pool = cpool # make pool configurable
+        pop = pop_rpool # make pop configurable
+        pool = rpool # make pool configurable
 
         # victim = pool.iloc[99]
         # print(L1(victim, pop, pool).sum())
@@ -52,6 +52,7 @@ fig, ax = plt.subplots()
 # ax.set_xscale("log")
 ax.plot(num_miRNAs, auc, linewidth=2.0)
 ax.invert_xaxis()
+ax.set_ylim([0.5,1]) # enables comparable auc scores between L1 and LLR
 plt.xlabel("number MiRNAs")
 plt.ylabel("ROC scores")
 plt.show()

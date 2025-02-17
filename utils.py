@@ -5,7 +5,7 @@ from sklearn.preprocessing import normalize
 from sklearn.metrics import roc_auc_score
 
 def L1(
-        X_victim: ArrayLike, population, pool
+        X_victim: ArrayLike, population, pool, table=False
 ):
     """
     L1 Distances Difference:
@@ -25,7 +25,7 @@ def L1(
     population_difference = np.abs(X_victim - mu)
     pool_difference = np.abs(X_victim - mu_hat)
 
-    print("pop mean", mu, "pool mean", mu_hat, "pop diff", population_difference, "pool diff", pool_difference)
+    # print("pop mean", mu, "pool mean", mu_hat, "pop diff", population_difference, "pool diff", pool_difference)
 
     # mu = np.average(population, axis=0).reshape(1, population.shape[1])
     # mu_hat = np.average(pool, axis=0).reshape(1, pool.shape[1])
@@ -33,7 +33,12 @@ def L1(
     # population_difference = np.abs(np.subtract(X_victim, mu))
     # pool_difference = np.abs(np.subtract(X_victim, mu_hat))
 
-    return np.subtract(population_difference, pool_difference)
+    result = np.subtract(population_difference, pool_difference)
+
+    if table==True:
+        result = np.subtract(population_difference, pool_difference), population_difference, pool_difference
+
+    return result
 
 # LLR taken over all individuals i for each miRNA j
 def LLR(
@@ -100,10 +105,20 @@ def LLR(
     # alternate hypothesis victim's x_j in pool, D(x_j^v) > 0
     # sum over miRNA js then D(x^v) -> normal distribution
     # test > threshold then victim is in pool
+
 def L1_ttest(victim, pop, pool):
     s = L1(victim, pop, pool)
     ttest = ttest_1samp(s, 0, axis=1, alternative="greater")[1]
     return 1-ttest
+
+# def L1_ttest(victim, pop, pool):
+#     ttest = []
+#     s = L1(victim, pop, pool)
+#     t = np.sum(s, axis=1)
+#     t = np.reshape(t, (len(t), 1))
+#     ttest = ttest_1samp(t, 0, axis=1, alternative="greater")[1]
+#     return 1-ttest
+
 
 def normalise(pop, pool, sample=None):
     normalisedpop = []

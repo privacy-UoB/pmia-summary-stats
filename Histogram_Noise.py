@@ -73,7 +73,7 @@ for m in range(len(multiplier)):
     # plt.legend(loc="upper right")
     # plt.show()
 
-    plt.hist((p_values_pop_L1[m], p_values_pool_L1[m], p_values_cpoolintopop_L1[m]), bins=50, label=f"noise multiplier number {m}")
+    plt.hist((p_values_pop_L1[m], p_values_pool_L1[m], p_values_cpoolintopop_L1[m]), bins=20, density=True, label=f"noise multiplier number {m}")
     plt.xlabel("p values pop & pool L1")
     plt.ylabel("count of deviations across 50 different range values")
     plt.legend(loc="upper right")
@@ -98,7 +98,10 @@ for m in range(len(multiplier)):
     # plt.legend(loc="upper right")
     # plt.show()
 
-    plt.hist((p_values_pop_LLR[m], p_values_pool_LLR[m], p_values_cpoolintopop_LLR[m]), bins=300, label=f"noise multiplier number {m}")
+    a = (p_values_pop_LLR[m], p_values_pool_LLR[m], p_values_cpoolintopop_LLR[m])
+    b = tuple(np.clip(a, -1000, 1000) for a in a)
+    plt.hist(b, bins=25, density=True, label=f"noise multiplier number {m}")
+    # filter pvalues to +- 2k, 25 bins, np.clip 
     plt.xlabel("p values pop & pool LLR")
     plt.ylabel("count of deviations across 300 different range values")
     plt.legend(loc="upper right")

@@ -2,19 +2,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 from scipy import stats
-from utils_datasets import load_timestamp_dataset, drop_timestamp_index
-from utils import auc_scores, normalise, Gaussian_noise
+from tabulate import tabulate
+from utils_datasets import load_timestamp_dataset, drop_timestamp_index, independent
+from utils import auc_scores, normalise, Gaussian_noise, L1
 
 include_synthetic_noise = True
 include_pvalue_histogram = True
-selected_distribution = 4
+include_tabulate = False
+selected_distribution = 0
 # 0 = fixed Gaussian
 # 1 = shifted Gaussian
 # 2 = skewed normal - function call doesn't work
 # 3 = skewed Cauchy
-# 4 = sanity check (samples from real dataset)
+# 4 = sanity check 1 (samples from real dataset)
+# 5 = sanity check 2 (shuffling the distance from time i to time i+1), not working yet
+# 6 = sanity check 3 (shuffling the vector from time i to time i+1)
 
-num_orders = 20 # number of iterations to average over
+num_orders = 5 # number of iterations to average over
 auc_L1 = []
 auc_LLR = []
 
@@ -32,6 +36,22 @@ if include_pvalue_histogram:
     p_values_synthpop_LLR = []
     p_values_synthpool_LLR = []
 
+if include_tabulate:
+    table_counter = []
+    stats_counter = []
+    total_counter = []
+    num_orders = 1
+    table_of_pop = True
+    individual = 0
+
+    def counter(person, population=True):
+        if population==True:
+            result = len([n for n in person if n<=0])
+        else:
+            result = len([n for n in person if n>0])
+        return result
+        
+
 # for loop for numorder lots of train/test, then average at end
 for j in range (num_orders):
 
@@ -45,6 +65,7 @@ for j in range (num_orders):
     # load new partitioned dataset each time we call num_orders
     ti_pop, ti_pool, ti_sample = load_timestamp_dataset()
     ti_pop, ti_pool = drop_timestamp_index(ti_pop, ti_pool)
+    ti_pop, ti_pool, statistics, independent_columns = independent(ti_pop, ti_pool, correlation=0.8)
 
     # for x, y in zip(ti_pop, ti_pool):
         # for row in range(len(x)):
@@ -63,7 +84,7 @@ for j in range (num_orders):
         # so why is the above for x, y in zip() working?!?!??
 
     # normalise over the miRNA values
-    ti_pop, ti_pool = normalise(ti_pop, ti_pool)
+    # ti_pop, ti_pool = normalise(ti_pop, ti_pool)
     # currently isn't working... think need to drop column names for normalise then readd
     # for x, y in zip(ti_pop, ti_pool):
     #     x, y = normalise(x, y)
@@ -81,6 +102,45 @@ for j in range (num_orders):
 
         aucs_L1.append(roc_L1)
         aucs_LLR.append(roc_LLR)
+
+        if include_tabulate:
+            # create table for original data
+            data = []
+            data.extend([np.average(pop, axis=0)] + [np.average(pool, axis=0)])
+            orig_pop, orig_pop_mu, orig_pop_muhat = L1(t_pop, pop, pool, table=True)
+            orig_pool, orig_pool_mu, orig_pool_muhat = L1(t_pool, pop, pool, table=True)
+            if table_of_pop==True:
+                data.extend([np.array(t_pop.iloc[individual])] + [orig_pop_mu[individual]] + [orig_pop_muhat[individual]])
+                original_table_count = counter(orig_pop[individual])
+            else:
+                data.extend([np.array(t_pool.iloc[individual])] + [orig_pool_mu[individual]] + [orig_pool_muhat[individual]])
+                original_table_count = counter(orig_pool[individual], population=False)
+
+            # create counter for all individuals for per timestamp stats table
+            sum_orig = [[],[],[]]
+            closer = True
+            for a, b in zip(orig_pop_mu, orig_pop_muhat):
+                sum_orig[0].append(np.sum(a))
+                sum_orig[1].append(np.sum(b))
+            if closer==True:
+                for c, d in zip(orig_pool_mu, orig_pool_muhat):
+                    sum_orig[1].append(np.sum(c))
+                    sum_orig[0].append(np.sum(d))
+            else:
+                for c, d in zip(orig_pool_mu, orig_pool_muhat):
+                    sum_orig[0].append(np.sum(c))
+                    sum_orig[1].append(np.sum(d))
+            sum_orig[2] = np.subtract(sum_orig[0], sum_orig[1])
+
+            # create counter for all individuals for original data
+            total_opop_count = []
+            total_opool_count = []
+            for pop_ind in orig_pop:
+                pop_count = counter(pop_ind)
+                total_opop_count.append(pop_count)
+            for pool_ind in orig_pool:
+                pool_count = counter(pool_ind, population=False)
+                total_opool_count.append(pool_count)
 
         if include_pvalue_histogram:
             p_values_realpop_L1.append(pvalue_pop_L1)
@@ -109,7 +169,6 @@ for j in range (num_orders):
 
             if len(local_pop) != len(local_noised_pop) or len(local_pool) != len(local_noised_pool):
                 continue
-
 
             pop_diff = np.ravel(np.subtract(local_pop, local_noised_pop))
             pool_diff = np.ravel(np.subtract(local_pool, local_noised_pool))
@@ -178,7 +237,7 @@ for j in range (num_orders):
                 pool_noise = np.reshape(clipped_pool_noise, (len(local_pool), 1205))
                 noisy_pool = local_pool + pool_noise
 
-            if selected_distribution == 4: # sanity check (samples from real dataset)
+            if selected_distribution == 4: # sanity check 1 (samples from real dataset)
                 # Instead of synthetic distribution, sample differences from real timepoints and run - sanity check
                 shuffled_pop_diff = list(pop_diff)
                 random.shuffle(shuffled_pop_diff)
@@ -189,6 +248,65 @@ for j in range (num_orders):
                 random.shuffle(shuffled_pool_diff)
                 pool_noise = np.reshape(shuffled_pool_diff, local_pool.shape)
                 noisy_pool = local_pool + pool_noise
+
+            if selected_distribution == 5: # sanity check 2 (shuffling the distance from time i to time i+1)
+                # approach where compare the distance between timepoints and the mean
+                # then ensure that the distance is added in the right direction (and away from the other mean?)
+                
+                if index == 0:
+                    # |t0 - t0mean|
+                    noise0, noise_pop0, noise_pop_alt0 = L1(local_noised_pop, local_pop, local_pool)
+                    noise0, noise_pool0, noise_pool_alt0 = L1(local_noised_pool, local_pop, local_pool)
+
+                    noisy_pop = local_noised_pop
+                    noisy_pool = local_noised_pool
+                else:
+                    # time - t0 (vector movement from t0)
+                    t0_vector = np.subtract(local_noised_pop, local_pop)
+                    t0_vector = np.subtract(local_noised_pool, local_pool)
+                    # |time - t0mean|
+                    noise, noise_pop, noise_pop_alt = L1(local_noised_pop, local_pop, local_pool)
+                    noise, noise_pool, noise_pool_alt = L1(local_noised_pool, local_pop, local_pool)
+
+                    if (np.subtract(noise_pop, noise_pop0)>0):
+                        pop_vector = local_noised_pop + noise_pop0
+                    else:
+                        pop_vector = local_noised_pop - noise_pop0
+
+                    if (np.subtract(noise_pool, noise_pool)>0):
+                        pool_vector = local_noised_pool + noise_pool0
+                    else:
+                        pool_vector = local_noised_pool - noise_pool0
+                        # shuffle
+                        # as selected_distribution == 4
+
+            if selected_distribution == 6: # sanity check 3 (shuffling the vector from time i to time i+1)
+                # if True then vector is taken via pop mean; otherwise via pool mean
+                from_pop_mean = True
+
+                # gather vectors from timepoint to corresponding pop/pool mean to timepoint 0
+                if from_pop_mean == True:
+                    pop_vector = (np.subtract(local_noised_pop, np.average(local_pop, axis=0)) + 
+                                    np.subtract(np.average(local_pop, axis=0), local_pop))
+                    pool_vector = (np.subtract(local_noised_pool, np.average(local_pop, axis=0)) + 
+                                    np.subtract(np.average(local_pop, axis=0), local_pool))
+                else:
+                    pop_vector = (np.subtract(local_noised_pop, np.average(local_pool, axis=0)) + 
+                                    np.subtract(np.average(local_pool, axis=0), local_pop))
+                    pool_vector = (np.subtract(local_noised_pool, np.average(local_pool, axis=0)) + 
+                                    np.subtract(np.average(local_pool, axis=0), local_pool))
+                
+                # shuffle vectors
+                shuffled_pop_vector = list(pop_vector)
+                random.shuffle(shuffled_pop_vector)
+                pop_noise = np.reshape(shuffled_pop_vector, local_pop.shape)
+                noisy_pop = local_pop + pop_noise
+
+                shuffled_pool_vector = list(pool_vector)
+                random.shuffle(shuffled_pool_vector)
+                pool_noise = np.reshape(shuffled_pool_vector, local_pool.shape)
+                noisy_pool = local_pool + pool_noise
+
 
             # # plot histogram of the timestamp differences vs the modelled synthetic noise added to timestamp0
             # plt.hist((c, np.concatenate((np.ravel(pop_noise), np.ravel(pool_noise)))), bins=50, 
@@ -205,6 +323,73 @@ for j in range (num_orders):
             aucs_syntheticL1.append(roc_synthL1)
             aucs_syntheticLLR.append(roc_synthLLR)
 
+            if include_tabulate:
+                # create table for synthetic data
+                synth_pop, synth_pop_mu, synth_pop_muhat = L1(noisy_pop, pop, pool, table=True)
+                synth_pool, synth_pool_mu, synth_pool_muhat = L1(noisy_pool, pop, pool, table=True)
+                if table_of_pop==True:
+                    data.extend([noisy_pop[individual]] + [synth_pop_mu[individual]] + [synth_pop_muhat[individual]])
+                    synthetic_table_count = counter(synth_pop[individual])
+                else:
+                    data.extend([noisy_pool[individual]] + [synth_pool_mu[individual]] + [synth_pool_muhat[individual]])
+                    synthetic_table_count = counter(synth_pool[individual], population=False)
+                table_counter.append([original_table_count, synthetic_table_count])
+
+                # create counter for all individuals for per timestamp stats table
+                sum_synth = [[],[],[]]
+                for a, b in zip(synth_pop_mu, synth_pop_muhat):
+                    sum_synth[0].append(np.sum(a))
+                    sum_synth[1].append(np.sum(b))
+                if closer==True:
+                    for c, d in zip(synth_pool_mu, synth_pool_muhat):
+                        sum_synth[1].append(np.sum(c))
+                        sum_synth[0].append(np.sum(d))
+                else:
+                    for c, d in zip(synth_pool_mu, synth_pool_muhat):
+                        sum_synth[0].append(np.sum(c))
+                        sum_synth[1].append(np.sum(d))
+                sum_synth[2] = np.subtract(sum_synth[0], sum_synth[1])
+                stats_counter.append([counter(sum_orig[2])] + [counter(sum_synth[2])])
+
+                # create counter for all individuals for synthetic data
+                total_spop_count = []
+                total_spool_count = []
+                for pop_ind in synth_pop:
+                    pop_count = counter(pop_ind)
+                    total_spop_count.append(pop_count)
+                for pool_ind in synth_pool:
+                    pool_count = counter(pool_ind, population=False)
+                    total_spool_count.append(pool_count)
+                total_counter.append([total_opop_count, total_opool_count, total_spop_count, total_spool_count])
+
+                # create table (https://pypi.org/project/tabulate/) of L1 miRNA stats for one person per timestamp
+                zipped_data = zip(*data)
+                transposed_data = [list(sublist) for sublist in zipped_data]
+
+                if table_of_pop==True:
+                    print(tabulate(transposed_data[:40], headers=["mu", "mu-hat", "orig x:", "|x - mu|", "|x - mu-hat|", 
+                                                             "synth x:", "|x - mu|", "|x - mu-hat|"], tablefmt="presto"), 
+                                                             "\n original and synthetic number miRNAs closer to mu than muhat:", 
+                                                             original_table_count, synthetic_table_count)
+                else:
+                    print(tabulate(transposed_data[:40], headers=["mu", "mu-hat", "orig x:", "|x - mu|", "|x - mu-hat|", 
+                                                             "synth x:", "|x - mu|", "|x - mu-hat|"], tablefmt="presto"), 
+                                                             "\n original and synthetic number miRNAs closer to muhat than mu:", 
+                                                             original_table_count, synthetic_table_count)
+                
+                # create table of L1 stats per individual per timestamp to the correct pop/pool mean for data
+                zipped_stats = zip(*(sum_orig + sum_synth))
+                transposed_stats = [list(sublist) for sublist in zipped_stats]
+
+                if closer==True:
+                    print(tabulate(transposed_stats, headers=["sum orig right", "sum orig wrong", "sum orig diff", 
+                                                            "sum synth right", "sum synth wrong", "sum synth diff"], 
+                                                            showindex="always", tablefmt="presto"))
+                else:
+                    print(tabulate(transposed_stats, headers=["sum o |x - mu|", "sum o |x - mu-hat|", "sum o L1", 
+                                                            "sum s |x - mu|", "sum s |x - mu-hat|", "sum s L1"], 
+                                                            showindex="always", tablefmt="presto"))
+                    
             if include_pvalue_histogram:
                 p_values_synthpop_L1.append(pvalue_synthpop_L1)
                 p_values_synthpool_L1.append(pvalue_synthpool_L1)
@@ -226,6 +411,35 @@ for j in range (num_orders):
         if len(aucs_syntheticLLR) >0:
             auc_syntheticLLR.append(aucs_syntheticLLR)
 
+    if include_tabulate:
+        print("original vs synthetic counter per timestamp in table for indiv", table_counter)
+
+        ordered_by_timestamp = []
+        diff_count = [[],[]]
+        for index, timestamp in enumerate(total_counter):
+            # print(f"original pop/pool vs synthetic pop/pool counter for timestamp {index}", timestamp)
+
+            # create table to compare counters over all original and synthetic individuals
+            orig = timestamp[0] + timestamp[1]
+            synt = timestamp[2] + timestamp[3]
+            diff = np.subtract(orig, synt)
+            diff_count[0].append(counter(diff, population=False))
+            diff_count[1].append(counter(diff))
+
+            ordered_by_timestamp.append(orig)
+            ordered_by_timestamp.append(synt)
+
+        zipped = zip(*ordered_by_timestamp)
+        transposed = [list(sublist) for sublist in zipped]
+        print(tabulate(transposed, headers=["orig 0", "synt 0", "orig 1", "synt 1", "orig 2", "synt 2", "orig 3", "synt 3", 
+                                            "orig 4", "synt 4", "orig 5", "synt 5"], showindex="always", tablefmt="presto"),
+                                            "\n number of people with more miRNAs closer to correct value in original data per time:", 
+                                            diff_count[0], 
+                                            "\n number of people with more miRNAs closer to correct value in synthetic data per time:", 
+                                            diff_count[1],
+                                            "\n number of people with distance closer to correct mean in original/synthetic per time",
+                                            stats_counter)
+
 # averaging the results from num_order iterations
 auc_L1 = np.average(auc_L1, axis=0)
 auc_LLR = np.average(auc_LLR, axis=0)
@@ -242,7 +456,7 @@ ax.plot(range(len(ti_pool)), auc_LLR, "-r", linewidth=2.0, label="LLR")
 if include_synthetic_noise:
     ax.plot(range(len(auc_syntheticL1)), auc_syntheticL1, "-g", linewidth=2.0, label="L1")
     ax.plot(range(len(auc_syntheticLLR)), auc_syntheticLLR, "-y", linewidth=2.0, label="LLR")
-ax.set_ylim([0.3,1.1]) # enables comparable auc scores between L1 and LLR
+ax.set_ylim([0.2,1.1]) # enables comparable auc scores between L1 and LLR
 
 plt.xlabel("timestamp")
 plt.ylabel("AUC scores")
