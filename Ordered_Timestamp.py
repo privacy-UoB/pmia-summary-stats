@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 from scipy import stats
+from sklearn.preprocessing import normalize
 from tabulate import tabulate
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index, independent
 from utils import auc_scores, normalise, Gaussian_noise, L1
@@ -9,7 +10,7 @@ from utils import auc_scores, normalise, Gaussian_noise, L1
 include_synthetic_noise = True
 include_pvalue_histogram = True
 include_tabulate = False
-selected_distribution = 0
+selected_distribution = 7
 # 0 = fixed Gaussian
 # 1 = shifted Gaussian
 # 2 = skewed normal - function call doesn't work
@@ -17,6 +18,7 @@ selected_distribution = 0
 # 4 = sanity check 1 (samples from real dataset)
 # 5 = sanity check 2 (shuffling the distance from time i to time i+1), not working yet
 # 6 = sanity check 3 (shuffling the vector from time i to time i+1)
+# 7 = sanity check 4 (shuffling the normalised vector from time i to time i+1)
 
 num_orders = 5 # number of iterations to average over
 auc_L1 = []
@@ -65,7 +67,8 @@ for j in range (num_orders):
     # load new partitioned dataset each time we call num_orders
     ti_pop, ti_pool, ti_sample = load_timestamp_dataset()
     ti_pop, ti_pool = drop_timestamp_index(ti_pop, ti_pool)
-    ti_pop, ti_pool, statistics, independent_columns = independent(ti_pop, ti_pool, correlation=0.8)
+    # ti_pop, ti_pool, statistics, independent_columns = independent(ti_pop, ti_pool, correlation=0.8)
+    ti_pop, ti_pool = independent(ti_pop, ti_pool, correlation=0.9)
 
     # for x, y in zip(ti_pop, ti_pool):
         # for row in range(len(x)):
@@ -304,6 +307,35 @@ for j in range (num_orders):
 
                 shuffled_pool_vector = list(pool_vector)
                 random.shuffle(shuffled_pool_vector)
+                pool_noise = np.reshape(shuffled_pool_vector, local_pool.shape)
+                noisy_pool = local_pool + pool_noise
+
+            if selected_distribution == 7: # sanity check 4 (shuffling the normalised vector from time i to time i+1)
+                # if True then vector is taken via pop mean; otherwise via pool mean
+                from_pop_mean = True
+
+                # gather vectors from timepoint to corresponding pop/pool mean to timepoint 0
+                if from_pop_mean == True:
+                    pop_vector = (np.subtract(local_noised_pop, np.average(local_pop, axis=0)) + 
+                                    np.subtract(np.average(local_pop, axis=0), local_pop))
+                    pool_vector = (np.subtract(local_noised_pool, np.average(local_pop, axis=0)) + 
+                                    np.subtract(np.average(local_pop, axis=0), local_pool))
+                else:
+                    pop_vector = (np.subtract(local_noised_pop, np.average(local_pool, axis=0)) + 
+                                    np.subtract(np.average(local_pool, axis=0), local_pop))
+                    pool_vector = (np.subtract(local_noised_pool, np.average(local_pool, axis=0)) + 
+                                    np.subtract(np.average(local_pool, axis=0), local_pool))
+                
+                # shuffle vectors
+                shuffled_pop_vector = list(pop_vector)
+                random.shuffle(shuffled_pop_vector)
+                shuffled_pop_vector = np.divide(shuffled_pop_vector, local_noised_pop)
+                pop_noise = np.reshape(shuffled_pop_vector, local_pop.shape)
+                noisy_pop = local_pop + pop_noise
+
+                shuffled_pool_vector = list(pool_vector)
+                random.shuffle(shuffled_pool_vector)
+                shuffled_pool_vector = np.divide(shuffled_pool_vector, local_noised_pool)
                 pool_noise = np.reshape(shuffled_pool_vector, local_pool.shape)
                 noisy_pool = local_pool + pool_noise
 

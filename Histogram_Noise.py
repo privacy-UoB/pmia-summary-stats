@@ -11,7 +11,7 @@ pop_rpool, pop_cpool, rpool, cpool = drop_dataset_index(pop_rpool, pop_cpool, rp
 pop = pop_cpool # make pop configurable
 pool = cpool # make pool configurable
 
-split_pop, split_cpool, cpool_into_pop = split_pool(pop, pool)
+split_pop, split_cpool, cpool_into_pop = split_pool(pop, pool, include_transfer=False)
 pop = split_pop
 pool = split_cpool
 
@@ -73,10 +73,11 @@ for m in range(len(multiplier)):
     # plt.legend(loc="upper right")
     # plt.show()
 
-    plt.hist((p_values_pop_L1[m], p_values_pool_L1[m], p_values_cpoolintopop_L1[m]), bins=20, density=True, label=f"noise multiplier number {m}")
-    plt.xlabel("p values pop & pool L1")
-    plt.ylabel("count of deviations across 50 different range values")
-    plt.legend(loc="upper right")
+    plt.hist((p_values_pop_L1[m], p_values_pool_L1[m], p_values_cpoolintopop_L1[m]), bins=20, density=True, 
+             label=["population", "pool", "transferred pool"])
+    plt.xlabel("L1-distances p values for population, pool and transferred pool")
+    plt.ylabel("normalised count of 20 different range values")
+    plt.legend(loc="upper center")
     plt.show()
 
     # LLR
@@ -99,10 +100,9 @@ for m in range(len(multiplier)):
     # plt.show()
 
     a = (p_values_pop_LLR[m], p_values_pool_LLR[m], p_values_cpoolintopop_LLR[m])
-    b = tuple(np.clip(a, -1000, 1000) for a in a)
-    plt.hist(b, bins=25, density=True, label=f"noise multiplier number {m}")
-    # filter pvalues to +- 2k, 25 bins, np.clip 
-    plt.xlabel("p values pop & pool LLR")
-    plt.ylabel("count of deviations across 300 different range values")
-    plt.legend(loc="upper right")
+    b = tuple(np.clip(i, -1000, 1000) for i in a)
+    plt.hist(b, bins=25, density=True, label=["population", "pool", "transferred pool"])
+    plt.xlabel("Likelihood ratio test statistics for population, pool and transferred pool")
+    plt.ylabel("normalised count of 25 different range values")
+    plt.legend(loc="upper left")
     plt.show()

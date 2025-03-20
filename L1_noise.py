@@ -62,7 +62,7 @@ for m in multiplier:
     aucs_L1 = []
     aucs_LLR = []
 
-    for j in range (40):
+    for j in range (200):
         # make deviation A LOT bigger, then plot on np.logspace scale
         deviation = m # not tailored variance to each miRNA; otherwise replace m with m * sigma_j
         nonneg_noisy_pop, nonneg_noisy_pool = Gaussian_noise(pop, pool, 0, deviation, clip=True)
@@ -87,11 +87,12 @@ for m in multiplier:
 
 # plots!
 fig, ax = plt.subplots()
-# ax.set_xscale("log")
+ax.set_xscale("log")
 # ax.plot(noise_scales_pop, auc_L1, "-b", linewidth=2.0, label="L1")
 # ax.plot(noise_scales_pool, auc_LLR, "-r", linewidth=2.0, label="LLR")
 ax.plot(multiplier, auc_L1, "-b", linewidth=2.0, label="L1")
 ax.plot(multiplier, auc_LLR, "-r", linewidth=2.0, label="LLR")
+ax.set_ylim([0.45,1]) # enables comparable auc scores between L1 and LLR
 plt.xlabel("noise scale")
 plt.ylabel("AUC scores")
 plt.legend(loc="upper right")

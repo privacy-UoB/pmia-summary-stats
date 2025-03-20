@@ -12,14 +12,14 @@ from utils import auc_scores, Gaussian_noise
 pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
 pop_rpool, pop_cpool, rpool, cpool = drop_dataset_index(pop_rpool, pop_cpool, rpool, cpool)
 
-pop = pop_rpool # make pop configurable
-pool = rpool # make pool configurable
+pop = pop_cpool # make pop configurable
+pool = cpool # make pool configurable
 
 sigma_j = np.std(pop, axis=0) # this is doing it over all the columns (miRNAs)
 multiplier = [0, 0.25, 0.5, 0.75, 1] # fractions of standard deviation applied to the dataset
 
 miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", ...]
-num_orders = 40 # number of different samples of MiRNAs
+num_orders = 200 # number of different samples of MiRNAs
 
 shuffled_lists = []
 nonneg_noised_pop_matrix = []
@@ -72,10 +72,10 @@ for count, m in enumerate(multiplier):
             local_pool = pool[selected_miRNAs]
 
             # Query: should these actually be local_noised_pop, local_noised_pool, pop, pool?
-            roc_L1 = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, p_values=False)
+            # roc_L1 = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, p_values=False)
             roc_LLR = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, LR=True, p_values=False)
 
-            aucs_L1.append(roc_L1)            
+            # aucs_L1.append(roc_L1)            
             aucs_LLR.append(roc_LLR)
 
         if len(aucs_L1) >0:
@@ -93,9 +93,9 @@ for count, m in enumerate(multiplier):
 # plots!
 fig, ax = plt.subplots()
 
-for l in range(len(multiplier)):
-    # ax.plot(num_miRNAs, noise_fraction_L1[l], linewidth=2.0, label=f"L1 {l}")
-    ax.plot(num_miRNAs, noise_fraction_LLR[l], linewidth=2.0, label=f"LLR {l}")
+for index, noise in enumerate(multiplier):
+    # ax.plot(num_miRNAs, noise_fraction_L1[index], linewidth=2.0, label=f"Std. dev. * {noise}")
+    ax.plot(num_miRNAs, noise_fraction_LLR[index], linewidth=2.0, label=f"Std. dev. * {noise}")
 ax.invert_xaxis()
 ax.set_ylim([0.5,1]) # enables comparable auc scores between L1 and LLR
 plt.xlabel("number MiRNAs")
