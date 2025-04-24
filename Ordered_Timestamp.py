@@ -8,9 +8,9 @@ from utils_datasets import load_timestamp_dataset, drop_timestamp_index, indepen
 from utils import auc_scores, normalise, Gaussian_noise, L1
 
 include_synthetic_noise = True
-include_pvalue_histogram = True
+include_pvalue_histogram = False
 include_tabulate = False
-selected_distribution = 7
+selected_distribution = 0
 # 0 = fixed Gaussian
 # 1 = shifted Gaussian
 # 2 = skewed normal - function call doesn't work
@@ -20,7 +20,7 @@ selected_distribution = 7
 # 6 = sanity check 3 (shuffling the vector from time i to time i+1)
 # 7 = sanity check 4 (shuffling the normalised vector from time i to time i+1)
 
-num_orders = 5 # number of iterations to average over
+num_orders = 2000 # number of iterations to average over
 auc_L1 = []
 auc_LLR = []
 
@@ -65,10 +65,10 @@ for j in range (num_orders):
         aucs_syntheticLLR = []
 
     # load new partitioned dataset each time we call num_orders
-    ti_pop, ti_pool, ti_sample = load_timestamp_dataset()
+    ti_pop, ti_pool, ti_sample = load_timestamp_dataset(with_independent_miRNAs=True)
     ti_pop, ti_pool = drop_timestamp_index(ti_pop, ti_pool)
     # ti_pop, ti_pool, statistics, independent_columns = independent(ti_pop, ti_pool, correlation=0.8)
-    ti_pop, ti_pool = independent(ti_pop, ti_pool, correlation=0.9)
+    # ti_pop, ti_pool = independent(ti_pop, ti_pool, correlation=0.9)
 
     # for x, y in zip(ti_pop, ti_pool):
         # for row in range(len(x)):

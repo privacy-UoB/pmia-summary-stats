@@ -12,14 +12,14 @@ from utils import auc_scores, Gaussian_noise
 pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
 pop_rpool, pop_cpool, rpool, cpool = drop_dataset_index(pop_rpool, pop_cpool, rpool, cpool)
 
-pop = pop_cpool # make pop configurable
-pool = cpool # make pool configurable
+pop = pop_rpool # make pop configurable
+pool = rpool # make pool configurable
 
 sigma_j = np.std(pop, axis=0) # this is doing it over all the columns (miRNAs)
 multiplier = [0, 0.25, 0.5, 0.75, 1] # fractions of standard deviation applied to the dataset
 
 miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", ...]
-num_orders = 200 # number of different samples of MiRNAs
+num_orders = 2000 # number of different samples of MiRNAs
 
 shuffled_lists = []
 nonneg_noised_pop_matrix = []
@@ -78,13 +78,13 @@ for count, m in enumerate(multiplier):
             # aucs_L1.append(roc_L1)            
             aucs_LLR.append(roc_LLR)
 
-        if len(aucs_L1) >0:
-            auc_L1.append(np.average(aucs_L1))
+        # if len(aucs_L1) >0:
+        #     auc_L1.append(np.average(aucs_L1))
 
         if len(aucs_LLR) >0:
             auc_LLR.append(np.average(aucs_LLR))
 
-    noise_fraction_L1.append(auc_L1)
+    # noise_fraction_L1.append(auc_L1)
     noise_fraction_LLR.append(auc_LLR)
 
 # print(f'AUC score:{auc_L1}')

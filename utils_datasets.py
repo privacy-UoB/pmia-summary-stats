@@ -92,7 +92,7 @@ def drop_dataset_index(pop_rpool, pop_cpool, random_pool, case_pool):
     case_pool = case_pool.drop(columns="diseases")
     return pop_rpool, pop_cpool, random_pool, case_pool
 
-def load_timestamp_dataset(MiRNA_filter=None, withNaN=None):
+def load_timestamp_dataset(with_independent_miRNAs=False, withNaN=False, MiRNA_filter=None, correlation=None):
 
     # columns are 215 individuals, rows are 1026 (1205?) miRNAs
     df = pd.read_csv('GSE68951_series_matrix.txt', skiprows=58, skipfooter=1, sep='\t', index_col=0)
@@ -125,6 +125,40 @@ def load_timestamp_dataset(MiRNA_filter=None, withNaN=None):
     timepoint = timepoint.split("\t")
     timepoint = timepoint[1:]
     timepoint = [timepoints.strip('\n, ,"') for timepoints in timepoint]
+
+    if with_independent_miRNAs==True:
+
+        # remember to rename the independent_90.csv file if rerun withNaN or different correlation
+        if os.path.exists("independent_90.csv"):
+            with open("independent_90.csv", "r") as f:
+                independent = f.read().splitlines()
+                population = population[independent]
+        
+        else:
+            threshold = 0.9 if correlation is None else correlation
+
+            correlations = {}
+            columns_list = population.columns.tolist()
+            random.shuffle(columns_list)
+            independent_miRNAs = columns_list.copy()
+
+            for col1, col2 in combinations(columns_list, 2):
+                a, b = pearsonr(population.loc[:, col1], population.loc[:, col2])
+                correlations[col1 + '___' + col2] = pearsonr(population.loc[:, col1], population.loc[:, col2])
+
+                if any(col1 == x for x in independent_miRNAs):
+                    if (np.abs(a) > threshold):
+                        independent_miRNAs.remove(col1)
+
+
+            result = pd.DataFrame.from_dict(correlations, orient='index')
+            result.columns = ['PCC', 'p-value']
+
+            population = population.loc[:, independent_miRNAs]
+
+            with open("independent_90.csv", "w") as f:
+                for item in population:
+                    f.write("%s\n" % item)
 
     # insert column label for timepoints
     population.insert(0, 'timepoint', timepoint)
@@ -171,12 +205,13 @@ def load_timestamp_dataset(MiRNA_filter=None, withNaN=None):
     """
     timepoint_i = []
     for i in range(8):
-        if withNaN:
-            t = new_population[(new_population["timepoint"] == f"timepoint: {(i+1)}") & 
-                               (new_population["disease"] == "disease: lung cancer")]
+        if withNaN==True:
+            chosen_population = new_population
         else:
-            t = population[(population["timepoint"] == f"timepoint: {(i+1)}") & 
-                           (population["disease"] == "disease: lung cancer")]
+            chosen_population = population 
+
+        t = chosen_population[(chosen_population["timepoint"] == f"timepoint: {(i+1)}") & 
+                              (chosen_population["disease"] == "disease: lung cancer")]
         timepoint_i.append(t)
         print(t.shape)
 
@@ -221,11 +256,7 @@ def drop_timestamp_index(pop, pool, sample=None):
 
 # https://stackoverflow.com/questions/33997753/calculating-pairwise-correlation-among-all-columns
 def independent(pop_timestamps, pool_timestamps, separate_timestamps=False, print_independent_miRNAs=False, correlation=None):
-
-# pickle - read python data
-# csv converter, .txt bad for df
-# best!! store cols that are independent
-
+    
     if os.path.exists("independent_pop.txt"):
         with open("independent_pop.txt", "r") as f:
             independent_pop = f.read().splitlines()

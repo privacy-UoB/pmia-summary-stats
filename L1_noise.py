@@ -7,8 +7,8 @@ from utils import auc_scores, Gaussian_noise, fpr_power, L1_threshold
 pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
 pop_rpool, pop_cpool, rpool, cpool = drop_dataset_index(pop_rpool, pop_cpool, rpool, cpool)
 
-pop = pop_cpool # make pop configurable
-pool = cpool # make pool configurable
+pop = pop_rpool # make pop configurable
+pool = rpool # make pool configurable
 
 mu = np.average(pop)
 mu_j = np.average(pop, axis=0)
@@ -62,7 +62,7 @@ for m in multiplier:
     aucs_L1 = []
     aucs_LLR = []
 
-    for j in range (200):
+    for j in range (2000):
         # make deviation A LOT bigger, then plot on np.logspace scale
         deviation = m # not tailored variance to each miRNA; otherwise replace m with m * sigma_j
         nonneg_noisy_pop, nonneg_noisy_pool = Gaussian_noise(pop, pool, 0, deviation, clip=True)

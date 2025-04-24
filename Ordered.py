@@ -12,14 +12,14 @@ from utils import auc_scores, fpr_power, LLR, L1, L1_threshold
 pop_rpool, pop_cpool, rpool, cpool = load_dataset(case_sample=D3)
 pop_rpool, pop_cpool, rpool, cpool = drop_dataset_index(pop_rpool, pop_cpool, rpool, cpool)
 
-pop = pop_rpool # make pop configurable
-pool = rpool # make pool configurable
+pop = pop_cpool # make pop configurable
+pool = cpool # make pool configurable
 
 auc_L1 = []
 auc_LLR = []
 num_miRNAs = []
 miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", ...]
-num_orders = 200 # number of different samples of MiRNAs
+num_orders = 2000 # number of different samples of MiRNAs
 
 shuffled_lists = []
 for j in range (num_orders):

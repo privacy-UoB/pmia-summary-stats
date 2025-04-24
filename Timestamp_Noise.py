@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 from utils import auc_scores, Gaussian_noise
 
-include_all_timestamps = True # if we wish to create one graph with all 8 timestamps
+include_all_timestamps = False # if we wish to create one graph with all 8 timestamps
 
 # load one partitioned dataset (moved from num_orders loop)
 ti_pop, ti_pool, ti_sample = load_timestamp_dataset()
@@ -30,7 +30,7 @@ ti_pop, ti_pool = drop_timestamp_index(ti_pop, ti_pool)
 # fractions of standard deviation applied to the dataset
 # multiplier = np.arange(0, 8, 0.04)
 multiplier = np.arange(0, 20, 0.1)
-num_orders = 200 # number of iterations to average over
+num_orders = 2000 # number of iterations to average over
 
 if include_all_timestamps:
     noisy_timestamps_L1 = []
