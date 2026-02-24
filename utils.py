@@ -62,11 +62,11 @@ def LLR(
     mu = np.average(population, axis=0)
     mu_hat = np.average(pool, axis=0)
 
-    var = np.var(population, axis=0)
-    var_hat = np.var(pool, axis=0)
+    var = np.var(population, axis=0, ddof=0)
+    var_hat = np.var(pool, axis=0, ddof=0)
 
-    sigma = np.std(population, axis=0)
-    sigma_hat = np.std(pool, axis=0)
+    sigma = np.std(population, axis=0, ddof=0)
+    sigma_hat = np.std(pool, axis=0, ddof=0)
 
     print(X_victim.shape, mu.shape, var.shape)
     
