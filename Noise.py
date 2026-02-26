@@ -1,11 +1,33 @@
+import sys
 import numpy as np
+import matplotlib
+if len(sys.argv) >= 6:
+    matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from utils_datasets import load_dataset, D3
+from utils_datasets import load_dataset, D3, D17
 from utils import auc_scores, Gaussian_noise
 
-include_longitudinals = True # if we wish to create one graph with all longitudinal entries, excludes "miRNA"
-include_deviations = True # if we want the x axis dependant on standard deviation of features
-dataset = "miRNA" # choices are "miRNA", "Timestamp", "FitBit", "Electricity"
+# CLI: python Noise.py <dataset> <include_deviations> <disease> <pop_idx> <pool_idx> [random_sample_size] [output.pdf]
+# Falls back to interactive defaults when no args given.
+DISEASES = {"D3": D3, "D17": D17}
+if len(sys.argv) >= 6:
+    dataset = sys.argv[1]             # miRNA, Timestamp, FitBit, Electricity
+    include_deviations = sys.argv[2].lower() == "true"
+    DISEASE = DISEASES.get(sys.argv[3], D3)
+    POP_IDX = int(sys.argv[4])
+    POOL_IDX = int(sys.argv[5])
+    RANDOM_SAMPLE_SIZE = int(sys.argv[6]) if len(sys.argv) >= 7 and sys.argv[6] != "_" else None
+    OUTPUT_FILE = sys.argv[7] if len(sys.argv) >= 8 else None
+else:
+    dataset = "miRNA"
+    include_deviations = True
+    DISEASE = D3
+    POP_IDX = 1
+    POOL_IDX = 1
+    RANDOM_SAMPLE_SIZE = None
+    OUTPUT_FILE = None
+
+include_longitudinals = True if dataset != "miRNA" else False
 iterations = 1 # to exclude repeating without additional longitudinal entries
 num_orders = 2000 # number of iterations to average over
 # fractions of standard deviation applied to the dataset:
@@ -20,10 +42,10 @@ ranges = [[0, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.
 # load partitioned dataset
 if dataset == "miRNA":
     include_longitudinals = False # failsafe
-    populations, pools = load_dataset(miRNA=True, disease_case_sample=D3)
+    populations, pools = load_dataset(miRNA=True, disease_case_sample=DISEASE, random_sample_size=RANDOM_SAMPLE_SIZE)
     # 0 = random, 1 = case:
-    pop = populations[0] # make pop configurable
-    pool = pools[0] # make pool configurable
+    pop = populations[POP_IDX]
+    pool = pools[POOL_IDX]
     multiplier = ranges[4]
     if include_deviations == True:
         multiplier = ranges[4]/100
@@ -161,4 +183,8 @@ ax.set_xscale("log")
 plt.xlabel("noise scale")
 plt.ylabel("AUC scores")
 plt.legend(loc="upper right")
-plt.show()
+if OUTPUT_FILE:
+    plt.savefig(OUTPUT_FILE)
+    print(f"Saved to {OUTPUT_FILE}")
+else:
+    plt.show()
