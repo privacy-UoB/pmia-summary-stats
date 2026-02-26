@@ -4,7 +4,8 @@ from utils_datasets import load_dataset, D3
 from utils import auc_scores, Gaussian_noise
 
 include_longitudinals = True # if we wish to create one graph with all longitudinal entries, excludes "miRNA"
-dataset = "miRNA" # choices are "miRNA", "Timestamp", "Fitbit", "Electricity"
+include_deviations = True # if we want the x axis dependant on standard deviation of features
+dataset = "miRNA" # choices are "miRNA", "Timestamp", "FitBit", "Electricity"
 iterations = 1 # to exclude repeating without additional longitudinal entries
 num_orders = 2000 # number of iterations to average over
 # fractions of standard deviation applied to the dataset:
@@ -18,11 +19,14 @@ ranges = [[0, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.
 
 # load partitioned dataset
 if dataset == "miRNA":
+    include_longitudinals = False # failsafe
     populations, pools = load_dataset(miRNA=True, disease_case_sample=D3)
     # 0 = random, 1 = case:
     pop = populations[0] # make pop configurable
     pool = pools[0] # make pool configurable
     multiplier = ranges[4]
+    if include_deviations == True:
+        multiplier = ranges[4]/100
 
 elif dataset == "Timestamp":
     population, chosen_pool = load_dataset(timestamp=True)
@@ -31,6 +35,8 @@ elif dataset == "Timestamp":
 elif dataset == "FitBit":
     population, chosen_pool = load_dataset(FitBit=True)
     multiplier = ranges[6]
+    if include_deviations == True:
+        multiplier = ranges[6]/10
 
 elif dataset == "Electricity":
     population, chosen_pool = load_dataset(electricity=True)
@@ -78,17 +84,20 @@ for i in range(iterations): # multiple if include_longitudinals, 1 otherwise
         pop = population[0]
         pool = chosen_pool[0]
 
-    sigma_j = np.std(pop, axis=0) # this is doing it over all the features (e.g. miRNAs)
-    for m in multiplier:
+    if include_deviations == True:
+        sigma_j = np.std(pop, axis=0) # this is doing it over all the features (e.g. miRNAs)
+
+    for count, m in enumerate(multiplier):
         aucs_L1 = []
         aucs_LLR = []
+        print("iteration", count)
 
         # for loop for numorder lots of train/test, then average at end
         for j in range (num_orders):
-            print("Run Number", j)
 
             # the 'noise' increases throughout each of the later timepoints the data is collected from
-            deviation = m # changed from m * sigmaj so it's not tailored variance to each feature
+            # changed from m * sigmaj so it's not tailored variance to each feature
+            deviation = m if include_deviations == False else m * sigma_j
 
             if dataset == "miRNA":
                 noisy_pop, noisy_pool = Gaussian_noise(pop, pool, 0, deviation, clip=True) # make noise non-negative
