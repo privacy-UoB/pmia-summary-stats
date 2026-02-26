@@ -30,14 +30,17 @@ else:
 include_longitudinals = True if dataset != "miRNA" else False
 iterations = 1 # to exclude repeating without additional longitudinal entries
 num_orders = 2000 # number of iterations to average over
-# fractions of standard deviation applied to the dataset:
+# noise ranges:
 ranges = [[0, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1], # 0
               np.arange(0, 8, 0.04), # 1, sufficient for m * sigma_j
               np.arange(0, 20, 0.1), # 2
               np.arange(0, 10000, 10), # 3
-              np.logspace(0, 15, base=2), # 4, used for standard noise values
+              np.logspace(0, 15, base=2), # 4, used for standard noise values (raw)
               np.geomspace(0.1, 10000, 100), # 5
               np.concatenate(([0], np.geomspace(0.1, 10000, 100)))] # 6
+# when include_deviations=True, m is in units of sigma (per-feature std dev),
+# so the same range works across all datasets:
+deviation_range = np.logspace(-2, 2, 50) # 0.01*sigma to 100*sigma
 
 # load partitioned dataset
 if dataset == "miRNA":
@@ -48,7 +51,7 @@ if dataset == "miRNA":
     pool = pools[POOL_IDX]
     multiplier = ranges[4]
     if include_deviations == True:
-        multiplier = ranges[4]/100
+        multiplier = deviation_range
 
 elif dataset == "Timestamp":
     population, chosen_pool = load_dataset(timestamp=True)
@@ -58,7 +61,7 @@ elif dataset == "FitBit":
     population, chosen_pool = load_dataset(FitBit=True)
     multiplier = ranges[6]
     if include_deviations == True:
-        multiplier = ranges[6]/10
+        multiplier = deviation_range
 
 elif dataset == "Electricity":
     population, chosen_pool = load_dataset(electricity=True)

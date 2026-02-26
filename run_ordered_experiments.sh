@@ -16,13 +16,13 @@ mkdir -p runs
 
 # Define experiments: disease metric pool_idx random_sample_size output_file
 declare -A EXP_DISEASE EXP_METRIC EXP_POOL EXP_SAMPLE EXP_OUTPUT
-ALL_KEYS="a b c"
+ALL_KEYS="a b"
 
-EXP_DISEASE=([a]=D17  [b]=D17  [c]=D17)
-EXP_METRIC=( [a]=LLR  [b]=LLR  [c]=L1)
-EXP_POOL=(   [a]=1    [b]=0    [c]=0)
-EXP_SAMPLE=( [a]=20   [b]=20   [c]=20)
-EXP_OUTPUT=( [a]=D17_LLR_case.pdf  [b]=D17_LLR_random.pdf  [c]=D17_L1_random.pdf)
+EXP_DISEASE=([a]=D17  [b]=D17)
+EXP_METRIC=( [a]=LLR  [b]=L1)
+EXP_POOL=(   [a]=0    [b]=0)
+EXP_SAMPLE=( [a]=20   [b]=20)
+EXP_OUTPUT=( [a]=D17_LLR_random.pdf  [b]=D17_L1_random.pdf)
 
 # Use CLI args as subset, or run all
 if [ $# -gt 0 ]; then
