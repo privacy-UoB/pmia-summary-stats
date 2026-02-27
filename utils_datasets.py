@@ -245,13 +245,14 @@ def load_timestamp_dataset(with_independent_miRNAs=False, withNaN=False, MiRNA_f
         for i in range(8):
             t = (p["timepoint"] == f"timepoint: {(i+1)}")
             if (len(t)>i):
-                if (t[i]): # if i in t should replace if (len(t)>i): but IndexError
+                if (t.iloc[i]): # if i in t should replace if (len(t)>i): but IndexError
                     new_patient_df = pd.concat([new_patient_df, p[t]], ignore_index=True)
             else:
-                rowNaN = pd.Series([np.nan for i in range(len(p.columns))], index=p.columns)
-                rowNaN.iloc[0] = p.iat[0,0]
-                rowNaN.iloc[1] = p.iat[0,1]
-                rowNaN.iloc[2] = f"timepoint: {(i+1)}"
+                row_data = {col: np.nan for col in p.columns}
+                row_data["patient_id"] = p.iat[0,0]
+                row_data["disease"] = p.iat[0,1]
+                row_data["timepoint"] = f"timepoint: {(i+1)}"
+                rowNaN = pd.Series(row_data)
                 new_patient_df.loc[i+1] = rowNaN
         new_patient_df = new_patient_df.iloc[1:] # is there a way to stop row0 being NaN from setup??
         new_population = pd.concat([new_population, new_patient_df], ignore_index=True)
@@ -301,20 +302,20 @@ def load_timestamp_dataset(with_independent_miRNAs=False, withNaN=False, MiRNA_f
     return (pop_timepoint_i, pool_timepoint_i, sample_timepoint_i, healthy_population)
 
 def drop_timestamp_index(pop, pool, sample=None, healthy=None):
-    for x, y in zip(pop, pool):
-        x.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
-        y.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
+    for idx in range(len(pop)):
+        pop[idx] = pop[idx].drop(["disease", "timepoint", "patient_id"], axis=1)
+        pool[idx] = pool[idx].drop(["disease", "timepoint", "patient_id"], axis=1)
     result = [pop, pool]
 
     if sample is not None:
-        for i in sample:
-            i.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
-        result.append[sample]
+        for idx in range(len(sample)):
+            sample[idx] = sample[idx].drop(["disease", "timepoint", "patient_id"], axis=1)
+        result.append(sample)
 
     if healthy is not None:
-        for j in healthy:
-            j.drop(["disease", "timepoint", "patient_id"], axis=1, inplace=True)
-        result.append[healthy]
+        for idx in range(len(healthy)):
+            healthy[idx] = healthy[idx].drop(["disease", "timepoint", "patient_id"], axis=1)
+        result.append(healthy)
 
     return result
 
