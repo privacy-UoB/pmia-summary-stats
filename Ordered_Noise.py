@@ -4,9 +4,8 @@ import matplotlib
 if len(sys.argv) >= 4:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import random
+import pandas as pd
 from utils_datasets import load_dataset, separate_diseased_miRNAs, D3, D17
-from utils import auc_scores, Gaussian_noise
 
 # CLI: python Ordered_Noise.py <disease> <metric> <pool_idx> [random_sample_size] [output.pdf]
 # Falls back to interactive defaults when no args given.
@@ -44,85 +43,128 @@ else:
     pop = without_diseased_miRNAs_pop
     pool = without_diseased_miRNAs_pool
 
-sigma_j = np.std(pop, axis=0) # this is doing it over all the columns (miRNAs)
-sigma_j_pool = np.std(pool, axis=0)
-ranges = [[0, 0.25, 0.5, 0.75, 1], # 0, fractions of standard deviation applied to the dataset
-              [0, 100, 200, 300, 400], # 1, static values produce similar noise to one observed case
-              np.concatenate(([0], np.logspace(1, 4, num=4)))] # 2
-multiplier = ranges[2]
+# --- Convert to numpy once ---
+pop_np = np.asarray(pop, dtype=np.float64)      # (n_pop, n_miRNAs)
+pool_np = np.asarray(pool, dtype=np.float64)     # (n_pool, n_miRNAs)
+n_pop, n_miRNAs = pop_np.shape
+n_pool = pool_np.shape[0]
 
-miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", ...]
-num_orders = 2000 # number of different samples of MiRNAs
+# Noise standard deviations per miRNA
+sigma_j_np = np.std(pop_np, axis=0)        # (n_miRNAs,)
+sigma_j_pool_np = np.std(pool_np, axis=0)  # (n_miRNAs,)
 
-# Pre-generate shuffled orderings (minimal memory)
-shuffled_lists = []
+# --- Pre-compute reference statistics (once) ---
+mu = np.mean(pop_np, axis=0)        # population mean per miRNA
+mu_hat = np.mean(pool_np, axis=0)   # pool mean per miRNA
+
+if L1_or_LLR == "LLR":
+    var_pop = np.var(pop_np, axis=0, ddof=0)
+    var_pool = np.var(pool_np, axis=0, ddof=0)
+    sigma_pop = np.std(pop_np, axis=0, ddof=0)
+    sigma_pool_ref = np.std(pool_np, axis=0, ddof=0)
+    log_ratio = np.log(sigma_pop / sigma_pool_ref)
+
+# miRNA step sizes: [2, 4, 6, ..., max_even <= n_miRNAs]
+step_counts = np.arange(2, n_miRNAs + 1, 2)
+n_steps = len(step_counts)
+step_indices = step_counts - 1  # 0-based indices into cumsum arrays
+
+# Pre-generate shuffled orderings as integer index arrays
+num_orders = 2000
+miRNA_indices = np.arange(n_miRNAs)
+shuffled_indices = []
 for j in range(num_orders):
-    current_miRNA_list = list(miRNAs)
-    random.shuffle(current_miRNA_list)
-    shuffled_lists.append(current_miRNA_list)
+    idx = miRNA_indices.copy()
+    np.random.shuffle(idx)
+    shuffled_indices.append(idx)
 
-noise_fraction_L1 = []
-noise_fraction_LLR = []
+multiplier = [0, 0.25, 0.5, 0.75, 1]
+noise_results = []
 
-# Process one multiplier at a time to reduce memory (~8 GB instead of ~37 GB)
 for count, m in enumerate(multiplier):
-    # Generate noise for all orders at this multiplier only
-    nonneg_noised_pops = []
-    nonneg_noised_pools = []
+    # Accumulate AUC across orders: shape (n_steps,)
+    auc_sum = np.zeros(n_steps)
+
     for j in range(num_orders):
-        nonneg_noisy_pop, nonneg_noisy_pool = Gaussian_noise(pop, pool, 0, m, clip=True)
-        nonneg_noised_pops.append(nonneg_noisy_pop)
-        nonneg_noised_pools.append(nonneg_noisy_pool)
+        idx = shuffled_indices[j]
 
-    auc_L1 = []
-    auc_LLR = []
-    num_miRNAs = []
-
-    for i in range(2, len(miRNAs), 2): # MiRNAs range from 1 to 466 in paper
-        aucs_L1 = []
-        aucs_LLR = []
-        num_miRNAs.append(i)
-
-        print("miRNA", i, "on iteration", count)
-
-        for j in range (num_orders):
-            current_shuffled_list = shuffled_lists[j]
-            selected_miRNAs = current_shuffled_list[:i]
-
-            local_noised_pop = nonneg_noised_pops[j][selected_miRNAs]
-            local_noised_pool = nonneg_noised_pools[j][selected_miRNAs]
-
-            local_pop = pop[selected_miRNAs]
-            local_pool = pool[selected_miRNAs]
-
-            # local_pop & local_pool instead of pop & pool due to attacker's lacking access to full information
-            if L1_or_LLR == "L1":
-                roc_L1 = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, p_values=False)
-                aucs_L1.append(roc_L1)
-            elif L1_or_LLR == "LLR":
-                roc_LLR = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, LR=True, p_values=False)
-                aucs_LLR.append(roc_LLR)
+        # Generate noise for this order (skip when m == 0)
+        if m == 0:
+            noised_pop = pop_np
+            noised_pool = pool_np
+        else:
+            pop_noise = np.random.normal(0, m * sigma_j_np, pop_np.shape)
+            pool_noise = np.random.normal(0, m * sigma_j_np, pool_np.shape)
+            noised_pop = np.clip(pop_np + pop_noise, 0, None)
+            noised_pool = np.clip(pool_np + pool_noise, 0, None)
 
         if L1_or_LLR == "L1":
-            if len(aucs_L1) >0:
-                auc_L1.append(np.average(aucs_L1))
+            # L1 differences: |x - mu| - |x - mu_hat| for each individual × miRNA
+            D_pop = np.abs(noised_pop - mu) - np.abs(noised_pop - mu_hat)   # (n_pop, n_miRNAs)
+            D_pool = np.abs(noised_pool - mu) - np.abs(noised_pool - mu_hat) # (n_pool, n_miRNAs)
+
+            # Shuffle columns and compute cumulative sums
+            D_pop_s = D_pop[:, idx]
+            D_pool_s = D_pool[:, idx]
+            S1_pop = np.cumsum(D_pop_s, axis=1)[:, step_indices]
+            S2_pop = np.cumsum(D_pop_s ** 2, axis=1)[:, step_indices]
+            S1_pool = np.cumsum(D_pool_s, axis=1)[:, step_indices]
+            S2_pool = np.cumsum(D_pool_s ** 2, axis=1)[:, step_indices]
+
+            # Vectorized t-statistic (raw t-stats used as scores — AUC is invariant
+            # under the monotone CDF transform stdtr, so we skip it for speed)
+            counts = step_counts[np.newaxis, :]  # (1, n_steps) for broadcasting
+            # Pop scores
+            mean_pop = S1_pop / counts
+            var0_pop = np.maximum(S2_pop / counts - mean_pop ** 2, 0)
+            se_pop = np.sqrt(var0_pop / (counts - 1))
+            scores_pop = np.where(se_pop > 0, mean_pop / se_pop, 0.0)  # (n_pop, n_steps)
+            # Pool scores
+            mean_pool_v = S1_pool / counts
+            var0_pool = np.maximum(S2_pool / counts - mean_pool_v ** 2, 0)
+            se_pool = np.sqrt(var0_pool / (counts - 1))
+            scores_pool = np.where(se_pool > 0, mean_pool_v / se_pool, 0.0)  # (n_pool, n_steps)
+
         elif L1_or_LLR == "LLR":
-            if len(aucs_LLR) >0:
-                auc_LLR.append(np.average(aucs_LLR))
+            # LLR per-miRNA contributions
+            contrib_pop = (np.square(noised_pop - mu) / (2 * var_pop)
+                          - np.square(noised_pop - mu_hat) / (2 * var_pool)
+                          + log_ratio)   # (n_pop, n_miRNAs)
+            contrib_pool = (np.square(noised_pool - mu) / (2 * var_pop)
+                           - np.square(noised_pool - mu_hat) / (2 * var_pool)
+                           + log_ratio)  # (n_pool, n_miRNAs)
 
-    noise_fraction_L1.append(auc_L1) if L1_or_LLR == "L1" else noise_fraction_LLR.append(auc_LLR)
+            # Shuffle columns, cumsum, extract at step positions
+            scores_pop = np.cumsum(contrib_pop[:, idx], axis=1)[:, step_indices]   # (n_pop, n_steps)
+            scores_pool = np.cumsum(contrib_pool[:, idx], axis=1)[:, step_indices] # (n_pool, n_steps)
 
-    # Free memory before next multiplier
-    del nonneg_noised_pops, nonneg_noised_pools
+        # Vectorized AUC for all steps at once via Mann-Whitney comparison
+        # AUC = P(pool_score > pop_score) + 0.5 * P(pool_score == pop_score)
+        gt = scores_pool[np.newaxis, :, :] > scores_pop[:, np.newaxis, :]   # (n_pop, n_pool, n_steps)
+        eq = scores_pool[np.newaxis, :, :] == scores_pop[:, np.newaxis, :]
+        aucs = (gt.sum(axis=(0, 1)) + 0.5 * eq.sum(axis=(0, 1))) / (n_pop * n_pool)  # (n_steps,)
+
+        auc_sum += aucs
+
+        if j % 200 == 0:
+            print(f"Multiplier {m} ({count + 1}/{len(multiplier)}): order {j}/{num_orders}")
+
+    noise_results.append(auc_sum / num_orders)
+
+# Save results to CSV
+num_miRNAs = step_counts.tolist()
+csv_path = OUTPUT_FILE.replace('.pdf', '.csv') if OUTPUT_FILE else 'ordered_noise_results.csv'
+df = pd.DataFrame({'num_miRNAs': num_miRNAs})
+for idx, noise in enumerate(multiplier):
+    df[f'std_dev_{noise}'] = noise_results[idx]
+df.to_csv(csv_path, index=False)
+print(f"Saved CSV to {csv_path}")
 
 # plots!
 fig, ax = plt.subplots()
 
 for index, noise in enumerate(multiplier):
-    if L1_or_LLR == "L1":
-        ax.plot(num_miRNAs, noise_fraction_L1[index], linewidth=2.0, label=f"Std. dev. = {noise}")
-    elif L1_or_LLR == "LLR":
-        ax.plot(num_miRNAs, noise_fraction_LLR[index], linewidth=2.0, label=f"Std. dev. = {noise}")
+    ax.plot(num_miRNAs, noise_results[index], linewidth=2.0, label=f"Std. dev. * {noise}")
 ax.invert_xaxis()
 ax.set_ylim([0.3,1]) # enables comparable auc scores between L1 and LLR
 plt.xlabel("number MiRNAs")

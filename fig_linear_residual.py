@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+"""Linear/residual drift factorial experiment.
+
+Decomposes each individual's drift into a per-individual linear component
+(β_k · x_k + α_k) and a residual (ε_k), then swaps each component
+independently using the k=1 nearest neighbor.
+
+Tests whether the destructive baseline-drift coupling lives in the
+per-individual regression slope or in the nonlinear residual.
+
+Produces fig_linear_residual.csv and fig_linear_residual.pdf.
+"""
+
+import contextlib
+import io
+import multiprocessing as mp
+import os
+import warnings
+import numpy as np
+import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from scipy.spatial.distance import cdist
+
+warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"utils")
+
+from utils_datasets import load_timestamp_dataset, drop_timestamp_index
+from utils import auc_scores, LLR
+
+NUM_ITERATIONS = 500
+NUM_WORKERS = max(1, os.cpu_count() - 1)
+TEST_TIMEPOINTS = [1, 4]
+CONDITIONS = ["self_self", "self_nn", "nn_self", "nn_nn"]
+
+
+def _get_nn_indices(baseline):
+    """Return array where entry i is the index of i's nearest neighbor."""
+    dist = cdist(baseline, baseline, metric='euclidean')
+    np.fill_diagonal(dist, np.inf)
+    return np.argmin(dist, axis=1)
+
+
+def _decompose_drift(baseline, diff):
+    """Fit per-individual OLS: δ_kj = β_k · x_kj(0) + α_k + ε_kj.
+
+    Returns (betas, alphas, residuals) where betas and alphas are 1-d arrays
+    of length n, and residuals has the same shape as diff.
+    """
+    n = len(baseline)
+    betas = np.empty(n)
+    alphas = np.empty(n)
+    for k in range(n):
+        betas[k], alphas[k] = np.polyfit(baseline[k], diff[k], 1)
+    linear_pred = betas[:, None] * baseline + alphas[:, None]
+    residuals = diff - linear_pred
+    return betas, alphas, residuals
+
+
+def _reconstruct(baseline, betas, alphas, residuals, nn_idx, condition):
+    """Build synthetic follow-up under a factorial condition.
+
+    condition is one of: self_self, self_nn, nn_self, nn_nn.
+    The first token controls whose (β, α) to use; the second controls whose ε.
+    NN's β is always applied to the individual's own baseline.
+    """
+    lin_src, res_src = condition.split('_')
+    b = betas if lin_src == 'self' else betas[nn_idx]
+    a = alphas if lin_src == 'self' else alphas[nn_idx]
+    e = residuals if res_src == 'self' else residuals[nn_idx]
+    synth_diff = b[:, None] * baseline + a[:, None] + e
+    return baseline + synth_diff
+
+
+def _one_iteration(seed):
+    """Run one iteration across all conditions and timepoints."""
+    rng = np.random.RandomState(seed)
+    warnings.filterwarnings("ignore")
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        ti_pop, ti_pool, _sample, _ = load_timestamp_dataset(
+            with_independent_miRNAs=True)
+        ti_pop, ti_pool = drop_timestamp_index(ti_pop, ti_pool)
+
+    pop0 = np.array(ti_pop[0], dtype=float)
+    pool0 = np.array(ti_pool[0], dtype=float)
+    n_pop = len(pop0)
+    n_pool = len(pool0)
+
+    results = {}
+
+    for t in TEST_TIMEPOINTS:
+        if t >= len(ti_pop):
+            continue
+        t_pop = np.array(ti_pop[t], dtype=float)
+        t_pool = np.array(ti_pool[t], dtype=float)
+
+        if len(t_pop) != n_pop or len(t_pool) != n_pool:
+            continue
+
+        pop_diff = t_pop - pop0
+        pool_diff = t_pool - pool0
+
+        # NN indices
+        nn_pop = _get_nn_indices(pop0)
+        nn_pool = _get_nn_indices(pool0)
+
+        # Decompose drift
+        pop_betas, pop_alphas, pop_resid = _decompose_drift(pop0, pop_diff)
+        pool_betas, pool_alphas, pool_resid = _decompose_drift(pool0, pool_diff)
+
+        # Factorial conditions
+        for cond in CONDITIONS:
+            synth_pop = _reconstruct(
+                pop0, pop_betas, pop_alphas, pop_resid, nn_pop, cond)
+            synth_pool = _reconstruct(
+                pool0, pool_betas, pool_alphas, pool_resid, nn_pool, cond)
+            with contextlib.redirect_stdout(io.StringIO()):
+                roc_llr, _, _ = auc_scores(synth_pop, synth_pool, pop0, pool0,
+                                           LR=True)
+                roc_l1, _, _ = auc_scores(synth_pop, synth_pool, pop0, pool0,
+                                          LR=False)
+            results[f"t{t}_{cond}_LLR"] = roc_llr
+            results[f"t{t}_{cond}_L1"] = roc_l1
+
+        # Full-NN reference: assign each individual their NN's entire drift
+        nn_pop_diff = pop_diff[nn_pop]
+        nn_pool_diff = pool_diff[nn_pool]
+        noisy_pop = pop0 + nn_pop_diff
+        noisy_pool = pool0 + nn_pool_diff
+        with contextlib.redirect_stdout(io.StringIO()):
+            roc_nn_llr, _, _ = auc_scores(noisy_pop, noisy_pool, pop0, pool0,
+                                          LR=True)
+            roc_nn_l1, _, _ = auc_scores(noisy_pop, noisy_pool, pop0, pool0,
+                                         LR=False)
+        results[f"t{t}_full_nn_LLR"] = roc_nn_llr
+        results[f"t{t}_full_nn_L1"] = roc_nn_l1
+
+        # Random permutation shuffle reference
+        perm_pop_diff = pop_diff[rng.permutation(n_pop)]
+        perm_pool_diff = pool_diff[rng.permutation(n_pool)]
+        noisy_pop = pop0 + perm_pop_diff
+        noisy_pool = pool0 + perm_pool_diff
+        with contextlib.redirect_stdout(io.StringIO()):
+            roc_perm_llr, _, _ = auc_scores(noisy_pop, noisy_pool, pop0, pool0,
+                                            LR=True)
+            roc_perm_l1, _, _ = auc_scores(noisy_pop, noisy_pool, pop0, pool0,
+                                           LR=False)
+        results[f"t{t}_perm_LLR"] = roc_perm_llr
+        results[f"t{t}_perm_L1"] = roc_perm_l1
+
+    return results
+
+
+def _setup_rc():
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.size": 10,
+        "axes.labelsize": 11,
+        "axes.titlesize": 12,
+    })
+
+
+def run():
+    print(f"Running {NUM_ITERATIONS} iterations across {NUM_WORKERS} workers...",
+          flush=True)
+
+    all_results = []
+    done = 0
+    with mp.Pool(NUM_WORKERS) as pool:
+        for result in pool.imap_unordered(_one_iteration, range(NUM_ITERATIONS)):
+            done += 1
+            if done % 50 == 0:
+                print(f"  {done}/{NUM_ITERATIONS}", flush=True)
+            all_results.append(result)
+
+    df_all = pd.DataFrame(all_results)
+
+    # Build output CSV
+    all_conditions = CONDITIONS + ["full_nn", "perm"]
+    rows = []
+    for cond in all_conditions:
+        row = {"condition": cond}
+        for t in TEST_TIMEPOINTS:
+            for metric in ("LLR", "L1"):
+                col = f"t{t}_{cond}_{metric}"
+                if col in df_all.columns:
+                    row[f"t{t}_{metric}"] = df_all[col].mean()
+        rows.append(row)
+
+    df_out = pd.DataFrame(rows)
+    df_out.to_csv("fig_linear_residual.csv", index=False)
+    print(f"\nSaved fig_linear_residual.csv")
+    print(df_out.to_string(index=False))
+
+    # ---- Plot: 1×2 grouped bar chart ----
+    _setup_rc()
+    fig, (ax_llr, ax_l1) = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Helper to look up a value from df_out
+    def _val(cond, metric_col):
+        return df_out.loc[df_out["condition"] == cond, metric_col].values[0]
+
+    group_labels = ["Self residual", "NN residual"]
+    x = np.arange(len(group_labels))
+    width = 0.35
+
+    for ax, metric, title in [(ax_llr, "LLR", "LLR"), (ax_l1, "L1", "L1")]:
+        col = f"t1_{metric}"
+        # Self linear: self_self (self residual), self_nn (nn residual)
+        self_lin = [_val("self_self", col), _val("self_nn", col)]
+        # NN linear: nn_self (self residual), nn_nn (nn residual)
+        nn_lin = [_val("nn_self", col), _val("nn_nn", col)]
+
+        ax.bar(x - width / 2, self_lin, width, label="Self linear",
+               color="tab:blue")
+        ax.bar(x + width / 2, nn_lin, width, label="NN linear",
+               color="tab:orange")
+
+        # Reference line: real drift
+        real_val = _val("self_self", col)
+        ax.axhline(real_val, ls=":", lw=1, color="grey", alpha=0.6)
+        ax.text(0.02, real_val, "real drift", va="bottom", fontsize=8,
+                color="grey", alpha=0.8, ha="left",
+                transform=ax.get_yaxis_transform())
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(group_labels)
+        ax.set_ylabel("AUC")
+        ax.set_ylim(0.4, 1.02)
+        ax.set_title(title)
+        ax.grid(True, alpha=0.3, axis="y")
+
+    handles, labels = ax_llr.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=2, fontsize=9,
+               bbox_to_anchor=(0.5, -0.02))
+    plt.tight_layout(rect=[0, 0.06, 1, 1])
+    fig.savefig("fig_linear_residual.pdf", dpi=300, bbox_inches="tight")
+    print("Saved fig_linear_residual.pdf")
+
+
+if __name__ == "__main__":
+    run()

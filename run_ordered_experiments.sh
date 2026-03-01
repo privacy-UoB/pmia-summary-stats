@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
-# 3 D17 Ordered_Noise experiments with random_sample_size=20
+# 4 D17 Ordered_Noise experiments
 # Usage:
-#   ./run_ordered_experiments.sh          # run all 3
+#   ./run_ordered_experiments.sh          # run all 4
 #   ./run_ordered_experiments.sh a b      # run only experiments a, b
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -14,51 +14,59 @@ uv sync
 
 mkdir -p runs
 
-# Define experiments: disease metric pool_idx random_sample_size output_file
-declare -A EXP_DISEASE EXP_METRIC EXP_POOL EXP_SAMPLE EXP_OUTPUT
-ALL_KEYS="a b"
-
-EXP_DISEASE=([a]=D17  [b]=D17)
-EXP_METRIC=( [a]=LLR  [b]=L1)
-EXP_POOL=(   [a]=0    [b]=0)
-EXP_SAMPLE=( [a]=20   [b]=20)
-EXP_OUTPUT=( [a]=D17_LLR_random.pdf  [b]=D17_L1_random.pdf)
+# Experiment definitions: key|disease|metric|pool_idx|sample|output
+EXPERIMENTS="
+a|D17|LLR|0|20|D17_LLR_random.pdf
+b|D17|L1|0|20|D17_L1_random.pdf
+c|D17|LLR|1|_|D17_LLR_case.pdf
+d|D17|L1|1|_|D17_L1_case.pdf
+"
 
 # Use CLI args as subset, or run all
 if [ $# -gt 0 ]; then
-    KEYS="$*"
+    SELECTED="$*"
 else
-    KEYS=$ALL_KEYS
+    SELECTED="a b c d"
 fi
 
-PIDS=()
-for key in $KEYS; do
-    disease=${EXP_DISEASE[$key]}
-    metric=${EXP_METRIC[$key]}
-    pool=${EXP_POOL[$key]}
-    sample=${EXP_SAMPLE[$key]}
-    output=${EXP_OUTPUT[$key]}
+PIDS=""
+LAUNCHED=0
+for exp in $EXPERIMENTS; do
+    key=$(echo "$exp" | cut -d'|' -f1)
+    # Skip if not selected
+    case " $SELECTED " in
+        *" $key "*) ;;
+        *) continue ;;
+    esac
+    disease=$(echo "$exp" | cut -d'|' -f2)
+    metric=$(echo "$exp" | cut -d'|' -f3)
+    pool=$(echo "$exp" | cut -d'|' -f4)
+    sample=$(echo "$exp" | cut -d'|' -f5)
+    output=$(echo "$exp" | cut -d'|' -f6)
     log="runs/log_ordered_${key}_${disease}_${metric}_${pool}.txt"
 
     echo "[$key] Starting: $disease $metric pool=$pool sample=$sample -> $output (log: $log)"
     uv run python Ordered_Noise.py "$disease" "$metric" "$pool" "$sample" "$output" > "$log" 2>&1 &
-    PIDS+=($!)
+    PIDS="$PIDS $!"
+    LAUNCHED=$((LAUNCHED + 1))
 done
 
 echo ""
-echo "All ${#PIDS[@]} experiments launched. PIDs: ${PIDS[*]}"
+echo "All $LAUNCHED experiments launched. PIDs:$PIDS"
 echo "Monitor with: tail -f runs/log_ordered_*.txt"
 echo ""
 
 # Wait for all and report
 FAILED=0
-for i in "${!PIDS[@]}"; do
-    key=$(echo $KEYS | cut -d' ' -f$((i+1)))
-    if wait "${PIDS[$i]}"; then
-        echo "[$key] Done (PID ${PIDS[$i]})"
+I=0
+for pid in $PIDS; do
+    I=$((I + 1))
+    key=$(echo $SELECTED | cut -d' ' -f$I)
+    if wait "$pid"; then
+        echo "[$key] Done (PID $pid)"
     else
-        echo "[$key] FAILED (PID ${PIDS[$i]})"
-        FAILED=$((FAILED+1))
+        echo "[$key] FAILED (PID $pid)"
+        FAILED=$((FAILED + 1))
     fi
 done
 
