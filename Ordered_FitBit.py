@@ -9,9 +9,13 @@ from utils import auc_scores
 # Check that the increasing dates do actually correspond to the same person ID? And should we do them based on how far the dates are apart?!
 
 error_bands = False
+fixed_FPR = True
 num_orders = 5000 # number of averages
 auc_L1 = []
 auc_LLR = []
+if fixed_FPR == True:
+    tpr_at_fpr_L1 = []
+    tpr_at_fpr_LLR = []
 # roc_curve_L1 = []
 # roc_curve_LLR = []
 
@@ -20,6 +24,9 @@ for j in range (num_orders):
 
     aucs_L1 = []
     aucs_LLR = []
+    if fixed_FPR == True:
+        tpr_at_fprs_L1 = []
+        tpr_at_fprs_LLR = []
     # roc_curves_L1 = []
     # roc_curves_LLR = []
 
@@ -52,6 +59,17 @@ for j in range (num_orders):
             continue
 
         aucs_L1.append(roc_L1)
+        aucs_LLR.append(roc_LLR)
+
+        if fixed_FPR == True:
+            fpr_L1, tpr_L1, thresholds_L1 = auc_scores(local_noised_pop, local_noised_pool, pop, pool, FPR=True)
+            fpr_LLR, tpr_LLR, thresholds_LLR = auc_scores(local_noised_pop, local_noised_pool, pop, pool, LR=True, FPR=True)
+
+            # TPR at a fixed FPR (e.g., 0.01 = 1%)
+            target_fpr = 1e-2
+            tpr_at_fprs_L1.append(np.interp(target_fpr, fpr_L1, tpr_L1))
+            tpr_at_fprs_LLR.append(np.interp(target_fpr, fpr_LLR, tpr_LLR))
+
         y_true_L1 = np.concatenate((np.zeros(len(pvalue_pop_L1)), np.ones(len(pvalue_pool_L1))))
         y_score_L1 = np.concatenate((pvalue_pop_L1, pvalue_pool_L1))
 
@@ -65,7 +83,6 @@ for j in range (num_orders):
         # curve_L1 = roc_curve(y_true_L1, y_score_L1)
         # roc_curves_L1.append(curve_L1)
 
-        aucs_LLR.append(roc_LLR)
         # y_true_LLR = np.concatenate((np.zeros(len(pvalue_pop_LLR)), np.ones(len(pvalue_pool_LLR))))
         # y_score_LLR = np.concatenate((pvalue_pop_LLR, pvalue_pool_LLR))
         # curve_LLR = roc_curve(y_true_LLR, y_score_LLR)
@@ -80,11 +97,23 @@ for j in range (num_orders):
         auc_LLR.append(aucs_LLR)
     # if len(roc_curves_LLR) >0:
     #     roc_curve_LLR.append(roc_curves_LLR)
+        
+    if fixed_FPR == True:
+        if len(tpr_at_fprs_L1) >0:
+            tpr_at_fpr_L1.append(tpr_at_fprs_L1)
+
+        if len(tpr_at_fprs_LLR) >0:
+            tpr_at_fpr_LLR.append(tpr_at_fprs_LLR)
 
 # num_order rows of datasets, columns are each timestamp
 if error_bands == False:
     auc_L1 = np.average(auc_L1, axis=0)
     auc_LLR = np.average(auc_LLR, axis=0)
+
+    if fixed_FPR == True:
+        tpr_at_fpr_L1 = np.average(tpr_at_fpr_L1, axis=0)
+        tpr_at_fpr_LLR = np.average(tpr_at_fpr_LLR, axis=0)
+
 else:
     auc_L1_error_bands = [np.average(auc_L1, axis=0), 
                           np.min(auc_L1, axis=0), 
@@ -92,24 +121,57 @@ else:
     auc_LLR_error_bands = [np.average(auc_LLR, axis=0), 
                           np.min(auc_LLR, axis=0), 
                           np.max(auc_LLR, axis=0)]
+    
+    if fixed_FPR == True:
+        tpr_L1_error_bands = [np.average(tpr_at_fpr_L1, axis=0), 
+                          np.min(tpr_at_fpr_L1, axis=0), 
+                          np.max(tpr_at_fpr_L1, axis=0)]
+        tpr_LLR_error_bands = [np.average(tpr_at_fpr_LLR, axis=0), 
+                          np.min(tpr_at_fpr_LLR, axis=0), 
+                          np.max(tpr_at_fpr_LLR, axis=0)]
 
 # plots!
-fig, ax = plt.subplots()
+fig, ax1 = plt.subplots()
+colours1 = ["cornflowerblue", "gold"]
+if fixed_FPR == True:
+    ax2 = ax1.twinx()
+    colours2 = ["mediumblue", "orange"]
+
 if error_bands == False:
-    ax.plot(range(iterations), auc_L1, "-b", linewidth=2.0, label="L1")
-    ax.plot(range(iterations), auc_LLR, "-r", linewidth=2.0, label="LLR")
+    ax1.plot(range(iterations), auc_L1, colours1[0], linewidth=2.0, label="AUC L1")
+    ax1.plot(range(iterations), auc_LLR, colours1[1], linewidth=2.0, label="AUC LLR")
+
+    if fixed_FPR == True:
+        ax2.plot(range(iterations), tpr_at_fpr_L1, colours2[0], linewidth=2.0, label="fpr L1")
+        ax2.plot(range(iterations), tpr_at_fpr_LLR, colours2[1], linewidth=2.0, label="fpr LLR")
+
 else:
-    ax.plot(range(iterations), auc_L1_error_bands[0], "-b", linewidth=2.0, label="L1")
-    ax.fill_between(range(iterations), auc_L1_error_bands[1], auc_L1_error_bands[2], alpha=0.2)
-    ax.plot(range(iterations), auc_LLR_error_bands[0], "-r", linewidth=2.0, label="LLR")
-    ax.fill_between(range(iterations), auc_LLR_error_bands[1], auc_LLR_error_bands[2], alpha=0.2)
+    ax1.plot(range(iterations), auc_L1_error_bands[0], colours1[0], linewidth=2.0, label="L1")
+    ax1.fill_between(range(iterations), auc_L1_error_bands[1], auc_L1_error_bands[2], alpha=0.2)
+    ax1.plot(range(iterations), auc_LLR_error_bands[0], colours1[1], linewidth=2.0, label="LLR")
+    ax1.fill_between(range(iterations), auc_LLR_error_bands[1], auc_LLR_error_bands[2], alpha=0.2)
 
+    if fixed_FPR == True:
+        ax2.plot(range(iterations), tpr_L1_error_bands[0], colours2[0], linewidth=2.0, label="L1")
+        ax2.fill_between(range(iterations), tpr_L1_error_bands[1], tpr_L1_error_bands[2], alpha=0.2)
+        ax2.plot(range(iterations), tpr_LLR_error_bands[0], colours2[1], linewidth=2.0, label="LLR")
+        ax2.fill_between(range(iterations), tpr_LLR_error_bands[1], tpr_LLR_error_bands[2], alpha=0.2)
 
-ax.set_ylim([0.2,1.1]) # enables comparable auc scores between L1 and LLR
+ax1.legend(loc='upper right')
+if fixed_FPR == True:
+    # Merge handles and labels
+    h1, l1 = ax1.get_legend_handles_labels()
+    h2, l2 = ax2.get_legend_handles_labels()
 
-plt.xlabel("timestamp")
-plt.ylabel("AUC scores")
-plt.legend(loc="upper right")
+    # Add combined legend to one axis
+    ax1.legend(h1 + h2, l1 + l2, loc='upper right')
+    ax2.set_ylabel("TPR at 0.01 FPR")
+
+ax1.set_xlabel("timestamp")
+ax1.set_ylabel("AUC scores")
+ax1.set_ylim([0.2,1.1]) # enables comparable auc scores between L1 and LLR
+ax1.grid(True)
+
 plt.show()
 
 # # plots!

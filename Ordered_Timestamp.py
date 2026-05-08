@@ -4,13 +4,15 @@ import random
 from scipy import stats
 from sklearn.preprocessing import normalize
 from tabulate import tabulate
-from utils_datasets import load_timestamp_dataset, drop_timestamp_index, independent
+from utils_datasets import load_dataset, separate_diseased_miRNAs, independent, D2
 from utils import auc_scores, normalise, Gaussian_noise, L1
 
 include_synthetic_noise = True
 include_pvalue_histogram = False
 include_tabulate = False
-selected_distribution = 0
+stratifying = False
+fixed_FPR = True
+selected_distribution = 7
 # 0 = fixed Gaussian
 # 1 = shifted Gaussian
 # 2 = skewed normal - function call doesn't work
@@ -24,9 +26,19 @@ num_orders = 2000 # number of iterations to average over
 auc_L1 = []
 auc_LLR = []
 
+if fixed_FPR:
+    target_fpr = 1e-2
+
+    tpr_at_fpr_L1 = []
+    tpr_at_fpr_LLR = []
+
 if include_synthetic_noise:
     auc_syntheticL1 = []
     auc_syntheticLLR = []
+
+    if fixed_FPR:
+        fpr_syntheticL1 = []
+        fpr_syntheticLLR = []
 
 if include_pvalue_histogram:
     p_values_realpop_L1 = []
@@ -60,13 +72,21 @@ for j in range (num_orders):
     aucs_L1 = []
     aucs_LLR = []
 
+    if fixed_FPR == True:
+        tpr_at_fprs_L1 = []
+        tpr_at_fprs_LLR = []
+
     if include_synthetic_noise:
         aucs_syntheticL1 = []
         aucs_syntheticLLR = []
 
+        if fixed_FPR:
+            fprs_syntheticL1 = []
+            fprs_syntheticLLR = []
+
     # load new partitioned dataset each time we call num_orders
-    ti_pop, ti_pool, ti_sample = load_timestamp_dataset(with_independent_miRNAs=True)
-    ti_pop, ti_pool = drop_timestamp_index(ti_pop, ti_pool)
+    if stratifying == False:
+        ti_pop, ti_pool = load_dataset(timestamp=True, with_independent_features=True)
     # ti_pop, ti_pool, statistics, independent_columns = independent(ti_pop, ti_pool, correlation=0.8)
     # ti_pop, ti_pool = independent(ti_pop, ti_pool, correlation=0.9)
 
@@ -92,6 +112,22 @@ for j in range (num_orders):
     # for x, y in zip(ti_pop, ti_pool):
     #     x, y = normalise(x, y)
 
+    else:
+        # lung disease miRNAs only/excluded in longitudinal pop & pool
+        only_pops, without_pops, only_pools, without_pools = separate_diseased_miRNAs(D2, "timestamp", with_independent_features=True)
+        ti_pop = without_pops
+        ti_pool = without_pools
+
+        miRNAs = list(ti_pop[0].keys())
+        current_miRNA_list = random.sample(miRNAs, len(only_pops[0].columns))
+
+        for index, (t_pop, t_pool) in enumerate(zip(ti_pop, ti_pool)):
+            t_pop = t_pop[t_pop.columns.intersection(current_miRNA_list)]
+            t_pool = t_pool[t_pool.columns.intersection(current_miRNA_list)]
+
+            ti_pop[index] = t_pop
+            ti_pool[index] = t_pool
+
     # configuring the reference pop & pool to match the dataframe of a particular timepoint
     pop = ti_pop[0]
     pool = ti_pool[0]
@@ -105,6 +141,15 @@ for j in range (num_orders):
 
         aucs_L1.append(roc_L1)
         aucs_LLR.append(roc_LLR)
+
+        if fixed_FPR == True:
+            fpr_L1, tpr_L1, thresholds_L1 = auc_scores(t_pop, t_pool, pop, pool, FPR=True)
+            fpr_LLR, tpr_LLR, thresholds_LLR = auc_scores(t_pop, t_pool, pop, pool, LR=True, FPR=True)
+
+            # TPR at a fixed FPR (e.g., 0.01 = 1%)
+            target_fpr = 1e-2
+            tpr_at_fprs_L1.append(np.interp(target_fpr, fpr_L1, tpr_L1))
+            tpr_at_fprs_LLR.append(np.interp(target_fpr, fpr_LLR, tpr_LLR))
 
         if include_tabulate:
             # create table for original data
@@ -355,6 +400,15 @@ for j in range (num_orders):
             aucs_syntheticL1.append(roc_synthL1)
             aucs_syntheticLLR.append(roc_synthLLR)
 
+            if fixed_FPR == True:
+                fpr_synthL1, tpr_synthL1, thresholds_synthL1 = auc_scores(t_pop, t_pool, pop, pool, FPR=True)
+                fpr_synthLLR, tpr_synthLLR, thresholds_synthLLR = auc_scores(t_pop, t_pool, pop, pool, LR=True, FPR=True)
+
+                # TPR at a fixed FPR (e.g., 0.01 = 1%)
+                target_fpr = 1e-2
+                fprs_syntheticL1.append(np.interp(target_fpr, fpr_synthL1, tpr_synthL1))
+                fprs_syntheticLLR.append(np.interp(target_fpr, fpr_synthLLR, tpr_synthLLR))
+
             if include_tabulate:
                 # create table for synthetic data
                 synth_pop, synth_pop_mu, synth_pop_muhat = L1(noisy_pop, pop, pool, table=True)
@@ -435,6 +489,13 @@ for j in range (num_orders):
     if len(aucs_LLR) >0:
         auc_LLR.append(aucs_LLR)
 
+    if fixed_FPR:
+        if len(tpr_at_fprs_L1) >0:
+            tpr_at_fpr_L1.append(tpr_at_fprs_L1)
+
+        if len(tpr_at_fprs_LLR) >0:
+            tpr_at_fpr_LLR.append(tpr_at_fprs_LLR)
+
     if include_synthetic_noise:
         # num_order rows of datasets, columns are each timestamp
         if len(aucs_syntheticL1) >0:
@@ -442,6 +503,13 @@ for j in range (num_orders):
 
         if len(aucs_syntheticLLR) >0:
             auc_syntheticLLR.append(aucs_syntheticLLR)
+
+        if fixed_FPR:
+            if len(fprs_syntheticL1) >0:
+                fpr_syntheticL1.append(fprs_syntheticL1)
+
+            if len(fprs_syntheticLLR) >0:
+                fpr_syntheticLLR.append(fprs_syntheticLLR)
 
     if include_tabulate:
         print("original vs synthetic counter per timestamp in table for indiv", table_counter)
@@ -476,23 +544,61 @@ for j in range (num_orders):
 auc_L1 = np.average(auc_L1, axis=0)
 auc_LLR = np.average(auc_LLR, axis=0)
 
+if fixed_FPR:
+    tpr_at_fpr_L1 = np.average(tpr_at_fpr_L1, axis=0)
+    tpr_at_fpr_LLR = np.average(tpr_at_fpr_LLR, axis=0)
+
 if include_synthetic_noise:
     # averaging the results from num_order iterations
     auc_syntheticL1 = np.average(auc_syntheticL1, axis=0)
     auc_syntheticLLR = np.average(auc_syntheticLLR, axis=0)
 
-# plotting the performance of the inference for each of the 8 timestamps
-fig, ax = plt.subplots()
-ax.plot(range(len(ti_pop)), auc_L1, "-b", linewidth=2.0, label="L1")
-ax.plot(range(len(ti_pool)), auc_LLR, "-r", linewidth=2.0, label="LLR")
-if include_synthetic_noise:
-    ax.plot(range(len(auc_syntheticL1)), auc_syntheticL1, "-g", linewidth=2.0, label="L1")
-    ax.plot(range(len(auc_syntheticLLR)), auc_syntheticLLR, "-y", linewidth=2.0, label="LLR")
-ax.set_ylim([0.2,1.1]) # enables comparable auc scores between L1 and LLR
+    if fixed_FPR:
+        fpr_syntheticL1 = np.average(fpr_syntheticL1, axis=0)
+        fpr_syntheticLLR = np.average(fpr_syntheticLLR, axis=0)
 
-plt.xlabel("timestamp")
-plt.ylabel("AUC scores")
-plt.legend(loc="upper right")
+# plotting the performance of the inference for each of the 8 timestamps
+fig, ax1 = plt.subplots()
+colours1 = ["cornflowerblue", "gold", "springgreen", "red"]
+if fixed_FPR == True:
+    ax2 = ax1.twinx()
+    colours2 = ["mediumblue", "orange", "green", "brown"]
+
+if not include_synthetic_noise:
+    ax1.plot(range(len(ti_pop)), auc_L1, colours1[0], linewidth=2.0, label="AUC L1")
+    ax1.plot(range(len(ti_pool)), auc_LLR, colours1[1], linewidth=2.0, label="AUC LLR")
+
+    if fixed_FPR:
+        ax2.plot(range(len(ti_pop)), tpr_at_fpr_L1, colours2[0], linewidth=2.0, label="fpr L1")
+        ax2.plot(range(len(ti_pool)), tpr_at_fpr_LLR, colours2[1], linewidth=2.0, label="fpr LLR")
+
+if include_synthetic_noise:
+    ax1.plot(range(len(auc_syntheticL1)), auc_L1[:6], colours1[0], linewidth=2.0, label="AUC L1 real")
+    ax1.plot(range(len(auc_syntheticLLR)), auc_LLR[:6], colours1[1], linewidth=2.0, label="AUC LLR real")
+    ax1.plot(range(len(auc_syntheticL1)), auc_syntheticL1, colours1[2], linewidth=2.0, label="AUC L1 synth")
+    ax1.plot(range(len(auc_syntheticLLR)), auc_syntheticLLR, colours1[3], linewidth=2.0, label="AUC LLR synth")
+
+    if fixed_FPR:
+        ax2.plot(range(len(fpr_syntheticL1)), fpr_L1[:6], colours2[0], linewidth=2.0, label="fpr L1 real")
+        ax2.plot(range(len(fpr_syntheticLLR)), fpr_LLR[:6], colours2[1], linewidth=2.0, label="fpr LLR real")
+        ax2.plot(range(len(fpr_syntheticL1)), fpr_syntheticL1, colours2[2], linewidth=2.0, label="fpr L1 synth")
+        ax2.plot(range(len(fpr_syntheticLLR)), fpr_syntheticLLR, colours2[3], linewidth=2.0, label="fpr LLR synth")
+
+ax1.legend(loc='upper right')
+if fixed_FPR == True:
+    # Merge handles and labels
+    h1, l1 = ax1.get_legend_handles_labels()
+    h2, l2 = ax2.get_legend_handles_labels()
+
+    # Add combined legend to one axis
+    ax1.legend(h1 + h2, l1 + l2, loc='upper right')
+    ax2.set_ylabel("TPR at 0.01 FPR")
+
+ax1.set_xlabel("timestamp")
+ax1.set_ylabel("AUC scores")
+ax1.set_ylim([0.2,1.1]) # enables comparable auc scores between L1 and LLR
+ax1.grid(True)
+
 plt.show()
 
 if include_pvalue_histogram:

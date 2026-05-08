@@ -6,6 +6,7 @@ from utils import auc_scores, Gaussian_noise
 
 L1_or_LLR = "LLR"
 error_bands = True
+fixed_FPR = True
 
 # load dataset
 population, random_pool = load_dataset(FitBit=True)
@@ -47,17 +48,32 @@ noise_fraction_L1 = []
 noise_fraction_LLR = []
 L1_error_bands = []
 LLR_error_bands = []
+if fixed_FPR == True:
+    target_fpr = 1e-2
+
+    noise_fraction_tpr_at_fpr_L1 = []
+    noise_fraction_tpr_at_fpr_LLR = []
+    tpr_L1_error_bands = []
+    tpr_LLR_error_bands = []
 
 for count, m in enumerate(multiplier):
+    num_features = []
     auc_L1 = []
     auc_LLR = []
     auc_L1_lower_bands, auc_L1_upper_bands = [[],[]]
     auc_LLR_lower_bands, auc_LLR_upper_bands = [[],[]]
-    num_features = []
+    if fixed_FPR == True:
+        tpr_at_fpr_L1 = []
+        tpr_at_fpr_LLR = []
+        tpr_L1_lower_bands, tpr_L1_upper_bands = [[],[]]
+        tpr_LLR_lower_bands, tpr_LLR_upper_bands = [[],[]]
    
     for i in range(2,len(features)):
         aucs_L1 = []
         aucs_LLR = []
+        if fixed_FPR == True:
+            tpr_at_fprs_L1 = []
+            tpr_at_fprs_LLR = []
         
         num_features.append(i)
 
@@ -77,6 +93,12 @@ for count, m in enumerate(multiplier):
             if L1_or_LLR == "L1":
                 roc_L1 = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, p_values=False)
                 aucs_L1.append(roc_L1)  
+
+                if fixed_FPR == True:
+                    fpr_L1, tpr_L1, thresholds_L1 = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, FPR=True)
+                    # TPR at a fixed FPR (e.g., 0.01 = 1%)
+                    tpr_at_fprs_L1.append(np.interp(target_fpr, fpr_L1, tpr_L1))
+
             else:
                 try:
                     roc_LLR = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, LR=True, p_values=False)
@@ -84,48 +106,115 @@ for count, m in enumerate(multiplier):
                     continue         
                 aucs_LLR.append(roc_LLR)
 
+                if fixed_FPR == True:
+                    fpr_LLR, tpr_LLR, thresholds_LLR = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, LR=True, FPR=True)
+                    # TPR at a fixed FPR (e.g., 0.01 = 1%)
+                    tpr_at_fprs_LLR.append(np.interp(target_fpr, fpr_LLR, tpr_LLR))
+
         if L1_or_LLR == "L1":
             if len(aucs_L1) >0:
                 auc_L1.append(np.average(aucs_L1))
+
+                if fixed_FPR == True:
+                    if len(tpr_at_fprs_L1) >0:
+                        tpr_at_fpr_L1.append(np.average(tpr_at_fprs_L1))
+
                 if error_bands == True:
                     auc_L1_lower_bands.append(np.min(aucs_L1, axis=0))
                     auc_L1_upper_bands.append(np.max(aucs_L1, axis=0))
+
+                    if fixed_FPR == True:
+                        tpr_L1_lower_bands.append(np.min(tpr_at_fprs_L1, axis=0))
+                        tpr_L1_upper_bands.append(np.max(tpr_at_fprs_L1, axis=0))
+
         else:
             if len(aucs_LLR) >0:
                 auc_LLR.append(np.average(aucs_LLR))
+
+                if fixed_FPR == True:
+                    if len(tpr_at_fprs_LLR) >0:
+                        tpr_at_fpr_L1.append(np.average(tpr_at_fprs_LLR))
+
                 if error_bands == True:
                     auc_LLR_lower_bands.append(np.min(aucs_LLR, axis=0))
                     auc_LLR_upper_bands.append(np.max(aucs_LLR, axis=0))
 
+                    if fixed_FPR == True:
+                        tpr_L1_lower_bands.append(np.min(tpr_at_fprs_LLR, axis=0))
+                        tpr_L1_upper_bands.append(np.max(tpr_at_fprs_LLR, axis=0))
+
     if L1_or_LLR == "L1":
         noise_fraction_L1.append(auc_L1)
+
+        if fixed_FPR == True:
+            noise_fraction_tpr_at_fpr_L1.append(tpr_at_fpr_L1)
+
         if error_bands == True:
             L1_error_bands.append([auc_L1_lower_bands, auc_L1_upper_bands])
+
+            if fixed_FPR == True:
+                tpr_L1_error_bands.append([tpr_L1_lower_bands, tpr_L1_upper_bands])
+
     else:
         noise_fraction_LLR.append(auc_LLR)
+
+        if fixed_FPR == True:
+            noise_fraction_tpr_at_fpr_LLR.append(tpr_at_fpr_LLR)
+
         if error_bands == True:
             LLR_error_bands.append([auc_LLR_lower_bands, auc_LLR_upper_bands])
 
-# print(f'AUC score:{auc_L1}')
-# print(f'AUC score:{auc_LLR}')
+            if fixed_FPR == True:
+                tpr_LLR_error_bands.append([tpr_LLR_lower_bands, tpr_LLR_upper_bands])
 
 # plots!
-fig, ax = plt.subplots()
+fig, ax1 = plt.subplots()
+colours1 = ["cornflowerblue", "gold", "springgreen", "red", "mediumpurple"]
+if fixed_FPR == True:
+    ax2 = ax1.twinx()
+    colours2 = ["mediumblue", "orange", "green", "brown", "purple"]
 
 for index, noise in enumerate(multiplier):
     if L1_or_LLR == "L1":
-        ax.plot(num_features, noise_fraction_L1[index], linewidth=2.0, label=f"Std. dev. * {noise}")
+        ax1.plot(num_features, noise_fraction_L1[index], colours1[index], linewidth=2.0, label=f"AUC Std. dev. * {noise}")
+
+        if fixed_FPR == True:
+            ax2.plot(num_features, noise_fraction_tpr_at_fpr_L1[index], colours2[index], linewidth=2.0, label=f"fpr Std. dev. * {noise}")
+
         if error_bands == True:
-            ax.fill_between(num_features, L1_error_bands[index][0], L1_error_bands[index][1], alpha=0.2)
-            print(L1_error_bands[index][0], L1_error_bands[index][1])
+            ax1.fill_between(num_features, L1_error_bands[index][0], L1_error_bands[index][1], alpha=0.2)
+            # print(L1_error_bands[index][0], L1_error_bands[index][1])
+
+            if fixed_FPR == True:
+                ax2.fill_between(num_features, tpr_L1_error_bands[index][0], tpr_L1_error_bands[index][1], alpha=0.2)
+
     else:
-        ax.plot(num_features, noise_fraction_LLR[index], linewidth=2.0, label=f"Std. dev. * {noise}")
+        ax1.plot(num_features, noise_fraction_LLR[index], colours1[index], linewidth=2.0, label=f"AUC Std. dev. * {noise}")
+
+        if fixed_FPR == True:
+            ax2.plot(num_features, noise_fraction_tpr_at_fpr_LLR[index], colours2[index], linewidth=2.0, label=f"fpr Std. dev. * {noise}")
+
         if error_bands == True:
-            ax.fill_between(num_features, LLR_error_bands[index][0], LLR_error_bands[index][1], alpha=0.2)
-            print(LLR_error_bands[index][0], LLR_error_bands[index][1])
-ax.invert_xaxis()
-ax.set_ylim([0.1,1.1]) # enables comparable auc scores between L1 and LLR
-plt.xlabel("number features")
-plt.ylabel("AUC scores")
-plt.legend(loc="upper right")
+            ax1.fill_between(num_features, LLR_error_bands[index][0], LLR_error_bands[index][1], alpha=0.2)
+            # print(LLR_error_bands[index][0], LLR_error_bands[index][1])
+
+            if fixed_FPR == True:
+                ax2.fill_between(num_features, tpr_LLR_error_bands[index][0], tpr_LLR_error_bands[index][1], alpha=0.2)
+
+ax1.legend(loc='upper right')
+if fixed_FPR == True:
+    # Merge handles and labels
+    h1, l1 = ax1.get_legend_handles_labels()
+    h2, l2 = ax2.get_legend_handles_labels()
+
+    # Add combined legend to one axis
+    ax1.legend(h1 + h2, l1 + l2, loc='upper right')
+    ax2.set_ylabel("TPR at 0.01 FPR")
+
+ax1.invert_xaxis()
+ax1.set_xlabel("number features")
+ax1.set_ylabel("AUC scores")
+ax1.set_ylim([0.1,1.1]) # enables comparable auc scores between L1 and LLR
+ax1.grid(True)
+
 plt.show() 
