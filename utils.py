@@ -2,7 +2,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 from scipy.stats import ttest_1samp
 from sklearn.preprocessing import normalize
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve
 
 def L1(
         X_victim: ArrayLike, population, pool, table=False
@@ -141,7 +141,7 @@ def normalise(pop, pool, sample=None):
 
     return result
 
-def auc_scores(victim_pop, victim_pool, pop, pool, LR=False, p_values=True):
+def auc_scores(victim_pop, victim_pool, pop, pool, LR=False, p_values=True, FPR=False):
 
     # collect p_values for pop and pool
     pvalue_pop = (L1_ttest(victim_pop, pop, pool) if LR==False else LLR(victim_pop, pop, pool))
@@ -150,9 +150,14 @@ def auc_scores(victim_pop, victim_pool, pop, pool, LR=False, p_values=True):
     # compare the true pop/pool placement to the predicted pop/pool placement
     y_true = np.concatenate((np.zeros(len(pvalue_pop)), np.ones(len(pvalue_pool))))
     y_score = np.concatenate((pvalue_pop, pvalue_pool))
+    
     aucs = roc_auc_score(y_true, y_score)
+    fpr, tpr, thresholds = roc_curve(y_true, y_score)
 
-    scores = ((aucs, pvalue_pop, pvalue_pool) if p_values==True else aucs)
+    if FPR==False:
+        scores = ((aucs, pvalue_pop, pvalue_pool) if p_values==True else aucs)
+    else:
+        scores = (fpr, tpr, thresholds)
     return scores
 
 def Gaussian_noise(pop, pool, mean, deviation, clip=False, mean2=None, deviation2=None):

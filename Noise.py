@@ -13,7 +13,7 @@ DISEASES = {"D3": D3, "D17": D17}
 if len(sys.argv) >= 6:
     dataset = sys.argv[1]             # miRNA, Timestamp, FitBit, Electricity
     include_deviations = sys.argv[2].lower() == "true"
-    DISEASE = DISEASES.get(sys.argv[3], D3)
+    DISEASE = DISEASES.get(sys.argv[3], D17)
     POP_IDX = int(sys.argv[4])
     POOL_IDX = int(sys.argv[5])
     RANDOM_SAMPLE_SIZE = int(sys.argv[6]) if len(sys.argv) >= 7 and sys.argv[6] != "_" else None
@@ -21,12 +21,13 @@ if len(sys.argv) >= 6:
 else:
     dataset = "miRNA"
     include_deviations = True
-    DISEASE = D3
+    DISEASE = D17
     POP_IDX = 1
     POOL_IDX = 1
     RANDOM_SAMPLE_SIZE = None
     OUTPUT_FILE = None
 
+fixed_FPR = True
 include_longitudinals = True if dataset != "miRNA" else False
 iterations = 1 # to exclude repeating without additional longitudinal entries
 num_orders = 2000 # number of iterations to average over
@@ -87,6 +88,9 @@ elif dataset == "Electricity":
 if include_longitudinals:
     noisy_longitudinals_L1 = []
     noisy_longitudinals_LLR = []
+    if fixed_FPR == True:
+        noisy_longitudinals_tpr_L1 = []
+        noisy_longitudinals_tpr_LLR = []
 
     error_bands = True # if we wish to include min/max AUC scores over all iterations
     if error_bands == False:
@@ -100,6 +104,9 @@ if include_longitudinals:
 for i in range(iterations): # multiple if include_longitudinals, 1 otherwise
     auc_L1 = []
     auc_LLR = []
+    if fixed_FPR == True:
+        tpr_at_fpr_L1 = []
+        tpr_at_fpr_LLR = []
 
     # configuring the reference pop & pool to match the dataframe of a particular data entry
     if include_longitudinals:
@@ -115,6 +122,9 @@ for i in range(iterations): # multiple if include_longitudinals, 1 otherwise
     for count, m in enumerate(multiplier):
         aucs_L1 = []
         aucs_LLR = []
+        if fixed_FPR == True:
+            tpr_at_fprs_L1 = []
+            tpr_at_fprs_LLR = []
         print("iteration", count)
 
         # for loop for numorder lots of train/test, then average at end
@@ -132,28 +142,54 @@ for i in range(iterations): # multiple if include_longitudinals, 1 otherwise
             # get performance/accuracy for L1 & LLR statistics over the noisy stat inputs compared to the 'original' pop & pool
             roc_L1 = auc_scores(noisy_pop, noisy_pool, pop, pool, p_values=False)
             roc_LLR = auc_scores(noisy_pop, noisy_pool, pop, pool, LR=True, p_values=False)
-            
+
             aucs_L1.append(roc_L1)
             aucs_LLR.append(roc_LLR)
 
+            if fixed_FPR == True:
+                fpr_L1, tpr_L1, thresholds_L1 = auc_scores(noisy_pop, noisy_pool, pop, pool, FPR=True)
+                fpr_LLR, tpr_LLR, thresholds_LLR = auc_scores(noisy_pop, noisy_pool, pop, pool, LR=True, FPR=True)
+
+                # TPR at a fixed FPR (e.g., 0.01 = 1%)
+                target_fpr = 1e-2
+                tpr_at_fprs_L1.append(np.interp(target_fpr, fpr_L1, tpr_L1))
+                tpr_at_fprs_LLR.append(np.interp(target_fpr, fpr_LLR, tpr_LLR))
+        
         # num_order rows of datasets, columns are each longitudinal entry
         if len(aucs_L1) >0:
             auc_L1.append(np.average(aucs_L1))
 
         if len(aucs_LLR) >0:
             auc_LLR.append(np.average(aucs_LLR))
+
+        if fixed_FPR == True:
+            if len(tpr_at_fprs_L1) >0:
+                tpr_at_fpr_L1.append(np.average(tpr_at_fprs_L1))
+
+            if len(tpr_at_fprs_LLR) >0:
+                tpr_at_fpr_LLR.append(np.average(tpr_at_fprs_LLR))
         
     if include_longitudinals:
         noisy_longitudinals_L1.append(auc_L1)
         noisy_longitudinals_LLR.append(auc_LLR)
+        if fixed_FPR == True:
+            noisy_longitudinals_tpr_L1.append(tpr_at_fpr_L1)
+            noisy_longitudinals_tpr_LLR.append(tpr_at_fpr_LLR)
 
 # plots!
-fig, ax = plt.subplots()
+fig, ax1 = plt.subplots()
+colours1 = ["cornflowerblue", "gold"]
+if fixed_FPR == True:
+    ax2 = ax1.twinx()
+    colours2 = ["mediumblue", "orange"]
 
 # plotting the performance of the inference for one timestamp over noise
 if not include_longitudinals:
-    ax.plot(multiplier, auc_L1, "-b", linewidth=2.0, label="L1")
-    ax.plot(multiplier, auc_LLR, "-r", linewidth=2.0, label="LLR")
+    ax1.plot(multiplier, auc_L1, colours1[0], linewidth=2.0, label="L1 AUC")
+    ax1.plot(multiplier, auc_LLR, colours1[1], linewidth=2.0, label="LLR AUC")
+    if fixed_FPR == True:
+        ax2.plot(multiplier, tpr_at_fpr_L1, colours2[0], linewidth=2.0, label="L1 tpr")
+        ax2.plot(multiplier, tpr_at_fpr_LLR, colours2[1], linewidth=2.0, label="LLR tpr")
 
 # plotting the performance of the inference for each of the longitudinal datasets over noise
 else:
@@ -169,23 +205,55 @@ else:
                                     [np.min(j) for j in transposed_LLR],
                                     [np.max(k) for k in transposed_LLR]]
 
-        ax.plot(multiplier, noisy_longitudinals_meanminmax_L1[0], linewidth=2.0, label=f"L1")
-        ax.fill_between(multiplier, noisy_longitudinals_meanminmax_L1[1], noisy_longitudinals_meanminmax_L1[2], alpha=0.2)
-        ax.plot(multiplier, noisy_longitudinals_meanminmax_LLR[0], linewidth=2.0, label=f"LLR")
-        ax.fill_between(multiplier, noisy_longitudinals_meanminmax_LLR[1], noisy_longitudinals_meanminmax_LLR[2], alpha=0.2)
+        ax1.plot(multiplier, noisy_longitudinals_meanminmax_L1[0], colours1[0], linewidth=2.0, label=f"L1 AUC")
+        ax1.fill_between(multiplier, noisy_longitudinals_meanminmax_L1[1], noisy_longitudinals_meanminmax_L1[2], alpha=0.2)
+        ax1.plot(multiplier, noisy_longitudinals_meanminmax_LLR[0], colours1[1], linewidth=2.0, label=f"LLR AUC")
+        ax1.fill_between(multiplier, noisy_longitudinals_meanminmax_LLR[1], noisy_longitudinals_meanminmax_LLR[2], alpha=0.2)
+
+        if fixed_FPR == True:
+            zipped_tpr_L1 = zip(*noisy_longitudinals_tpr_L1)
+            zipped_tpr_LLR = zip(*noisy_longitudinals_tpr_LLR)
+            transposed_tpr_L1 = [list(sublist) for sublist in zipped_tpr_L1]
+            transposed_tpr_LLR = [list(sublist) for sublist in zipped_tpr_LLR]
+            noisy_longitudinals_meanminmax_tpr_L1 = [[np.average(i) for i in transposed_tpr_L1], 
+                                        [np.min(j) for j in transposed_tpr_L1],
+                                        [np.max(k) for k in transposed_tpr_L1]]
+            noisy_longitudinals_meanminmax_tpr_LLR = [[np.average(i) for i in transposed_tpr_LLR], 
+                                        [np.min(j) for j in transposed_tpr_LLR],
+                                        [np.max(k) for k in transposed_tpr_LLR]]
+
+            ax2.plot(multiplier, noisy_longitudinals_meanminmax_tpr_L1[0], colours2[0], linewidth=2.0, label=f"L1 tpr")
+            ax2.fill_between(multiplier, noisy_longitudinals_meanminmax_tpr_L1[1], noisy_longitudinals_meanminmax_tpr_L1[2], alpha=0.2)
+            ax2.plot(multiplier, noisy_longitudinals_meanminmax_tpr_LLR[0], colours2[1], linewidth=2.0, label=f"LLR tpr")
+            ax2.fill_between(multiplier, noisy_longitudinals_meanminmax_tpr_LLR[1], noisy_longitudinals_meanminmax_tpr_LLR[2], alpha=0.2)
     
     else:
         for l in range(iterations):
             if L1_or_LLR == "L1":
-                ax.plot(multiplier, noisy_longitudinals_L1[l], linewidth=2.0, label=f"L1 timestamp {l}")
+                ax1.plot(multiplier, noisy_longitudinals_L1[l], colours1[0], linewidth=2.0, label=f"L1 AUC timestamp {l}")
+                if fixed_FPR == True:
+                    ax2.plot(multiplier, noisy_longitudinals_tpr_L1[l], colours2[0], linewidth=2.0, label=f"L1 tpr timestamp {l}")
             elif L1_or_LLR == "LLR":
-                ax.plot(multiplier, noisy_longitudinals_LLR[l], linewidth=2.0, label=f"LLR timestamp {l}")
+                ax1.plot(multiplier, noisy_longitudinals_LLR[l], colours1[1], linewidth=2.0, label=f"LLR AUC timestamp {l}")
+                if fixed_FPR == True:
+                    ax2.plot(multiplier, noisy_longitudinals_tpr_L1[l], colours2[1], linewidth=2.0, label=f"LLR tpr timestamp {l}")
 
-ax.set_ylim([0.45, 1]) # enables comparable auc scores between L1 and LLR
-ax.set_xscale("log")
-plt.xlabel("noise scale")
-plt.ylabel("AUC scores")
-plt.legend(loc="upper right")
+ax1.legend(loc='upper right')
+if fixed_FPR == True:
+    # Merge handles and labels
+    h1, l1 = ax1.get_legend_handles_labels()
+    h2, l2 = ax2.get_legend_handles_labels()
+
+    # Add combined legend to one axis
+    ax1.legend(h1 + h2, l1 + l2, loc='upper right')
+    ax2.set_ylabel("TPR at 0.01 FPR")
+
+ax1.set_xscale("log")
+ax1.set_xlabel("noise scale")
+ax1.set_ylabel("AUC scores")
+ax1.set_ylim([0.45, 1]) # enables comparable auc scores between L1 and LLR
+ax1.grid(True)
+
 if OUTPUT_FILE:
     plt.savefig(OUTPUT_FILE)
     print(f"Saved to {OUTPUT_FILE}")
