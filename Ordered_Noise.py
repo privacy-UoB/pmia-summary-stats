@@ -10,6 +10,7 @@ from utils import auc_scores, Gaussian_noise
 
 L1_or_LLR = "L1"
 stratifying = False # Not enough pool miRNAs in True case
+fixed_FPR = True
 
 if stratifying == False:
     # load dataset
@@ -63,15 +64,24 @@ for j in range (num_orders):
 
 noise_fraction_L1 = []
 noise_fraction_LLR = []
+if fixed_FPR == True:
+    noise_fraction_tpr_at_fpr_L1 = []
+    noise_fraction_tpr_at_fpr_LLR = []
 
 for count, m in enumerate(multiplier):
     auc_L1 = []
     auc_LLR = []
+    if fixed_FPR == True:
+        tpr_at_fpr_L1 = []
+        tpr_at_fpr_LLR = []
     num_miRNAs = []
    
     for i in range(2, len(miRNAs), 2): # MiRNAs range from 1 to 466 in paper
         aucs_L1 = []
         aucs_LLR = []
+        if fixed_FPR == True:
+            tpr_at_fprs_L1 = []
+            tpr_at_fprs_LLR = []
         num_miRNAs.append(i)
 
         print("miRNA", i, "on iteration", count)
@@ -93,30 +103,82 @@ for count, m in enumerate(multiplier):
             if L1_or_LLR == "L1":
                 roc_L1 = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, p_values=False)
                 aucs_L1.append(roc_L1)   
+
+                if fixed_FPR == True:
+                    fpr_L1, tpr_L1, thresholds_L1 = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, FPR=True)
+
+                    # TPR at a fixed FPR (e.g., 0.01 = 1%)
+                    target_fpr = 1e-2
+                    tpr_at_fprs_L1.append(np.interp(target_fpr, fpr_L1, tpr_L1))
             elif L1_or_LLR == "LLR":
                 roc_LLR = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, LR=True, p_values=False)       
                 aucs_LLR.append(roc_LLR)
 
+                if fixed_FPR == True:
+                    fpr_LLR, tpr_LLR, thresholds_LLR = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, LR=True, FPR=True)
+
+                    # TPR at a fixed FPR (e.g., 0.01 = 1%)
+                    target_fpr = 1e-2
+                    tpr_at_fprs_LLR.append(np.interp(target_fpr, fpr_LLR, tpr_LLR))
+
         if L1_or_LLR == "L1":
             if len(aucs_L1) >0:
                 auc_L1.append(np.average(aucs_L1))
+
+            if fixed_FPR == True:
+                if len(tpr_at_fprs_L1) >0:
+                    tpr_at_fpr_L1.append(np.average(tpr_at_fprs_L1))
+
         elif L1_or_LLR == "LLR":
             if len(aucs_LLR) >0:
                 auc_LLR.append(np.average(aucs_LLR))
 
+            if fixed_FPR == True:
+                if len(tpr_at_fprs_LLR) >0:
+                    tpr_at_fpr_LLR.append(np.average(tpr_at_fprs_LLR))
+
     noise_fraction_L1.append(auc_L1) if L1_or_LLR == "L1" else noise_fraction_LLR.append(auc_LLR)
+    if fixed_FPR == True:
+        noise_fraction_tpr_at_fpr_L1.append(tpr_at_fpr_L1) if L1_or_LLR == "L1" else noise_fraction_tpr_at_fpr_LLR.append(tpr_at_fpr_LLR)
 
 # plots!
-fig, ax = plt.subplots()
+fig, ax1 = plt.subplots()
+colours1 = ["cornflowerblue", "gold", "springgreen", "red", "mediumpurple"]
+if fixed_FPR == True:
+    ax2 = ax1.twinx()
+    colours2 = ["mediumblue", "orange", "green", "brown", "purple"]
 
 for index, noise in enumerate(multiplier):
     if L1_or_LLR == "L1":
-        ax.plot(num_miRNAs, noise_fraction_L1[index], linewidth=2.0, label=f"Std. dev. = {noise}")
+        # Left-hand x axis for AUC scores
+        ax1.plot(num_miRNAs, noise_fraction_L1[index], colours1[index], linewidth=2.0, label=f"AUC Std. dev. = {noise}")
+
+        # Right hand x axis for TPR at fixed FPR
+        if fixed_FPR == True:
+            ax2.plot(num_miRNAs, noise_fraction_tpr_at_fpr_L1[index], colours2[index], linewidth=2.0, label=f"AUC Std. dev. = {noise}")
+
     elif L1_or_LLR == "LLR":
-        ax.plot(num_miRNAs, noise_fraction_LLR[index], linewidth=2.0, label=f"Std. dev. = {noise}")
-ax.invert_xaxis()
-ax.set_ylim([0.3,1]) # enables comparable auc scores between L1 and LLR
-plt.xlabel("number MiRNAs")
-plt.ylabel("AUC scores")
-plt.legend(loc="upper right")
+        # Left-hand x axis for AUC scores
+        ax1.plot(num_miRNAs, noise_fraction_LLR[index], colours1[index], linewidth=2.0, label=f"fpr Std. dev. = {noise}")
+
+        # Right hand x axis for TPR at fixed FPR
+        if fixed_FPR == True:
+            ax2.plot(num_miRNAs, noise_fraction_tpr_at_fpr_LLR[index], colours2[index], linewidth=2.0, label=f"fpr Std. dev. = {noise}")
+
+ax1.legend(loc='upper right')
+if fixed_FPR == True:
+    # Merge handles and labels
+    h1, l1 = ax1.get_legend_handles_labels()
+    h2, l2 = ax2.get_legend_handles_labels()
+
+    # Add combined legend to one axis
+    ax1.legend(h1 + h2, l1 + l2, loc='upper right')
+    ax2.set_ylabel("TPR at 0.01 FPR")
+
+ax1.invert_xaxis()
+ax1.set_xlabel("number miRNAs")
+ax1.set_ylabel("AUC scores")
+ax1.set_ylim([0.3,1]) # enables comparable auc scores between L1 and LLR
+ax1.grid(True)
+
 plt.show() 
