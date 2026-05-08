@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from utils_datasets import load_dataset, separate_diseased_miRNAs, D17
+from utils_datasets import load_dataset, separate_diseased_miRNAs, D3
 from utils import auc_scores, Gaussian_noise
 
 # paper: the demonstrated graphs showing roc curves
@@ -14,7 +14,7 @@ fixed_FPR = True
 
 if stratifying == False:
     # load dataset
-    population, pool = load_dataset(miRNA=True, disease_case_sample=D17)
+    population, pool = load_dataset(miRNA=True, disease_case_sample=D3)
 
     # 0 = random, 1 = case
     pop = population[1] # make pop configurable
@@ -22,7 +22,7 @@ if stratifying == False:
 
 else:
     # diseased case sample pop/pool only
-    only_diseased_miRNAs_pop, without_diseased_miRNAs_pop, only_diseased_miRNAs_pool, without_diseased_miRNAs_pool = separate_diseased_miRNAs(D17, "miRNA")
+    only_diseased_miRNAs_pop, without_diseased_miRNAs_pop, only_diseased_miRNAs_pool, without_diseased_miRNAs_pool = separate_diseased_miRNAs(D3, "miRNA")
     pop = without_diseased_miRNAs_pop
     pool = without_diseased_miRNAs_pool
 

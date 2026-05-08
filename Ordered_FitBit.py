@@ -14,6 +14,8 @@ num_orders = 5000 # number of averages
 auc_L1 = []
 auc_LLR = []
 if fixed_FPR == True:
+    target_fpr = 1e-2
+
     tpr_at_fpr_L1 = []
     tpr_at_fpr_LLR = []
 # roc_curve_L1 = []
@@ -66,7 +68,6 @@ for j in range (num_orders):
             fpr_LLR, tpr_LLR, thresholds_LLR = auc_scores(local_noised_pop, local_noised_pool, pop, pool, LR=True, FPR=True)
 
             # TPR at a fixed FPR (e.g., 0.01 = 1%)
-            target_fpr = 1e-2
             tpr_at_fprs_L1.append(np.interp(target_fpr, fpr_L1, tpr_L1))
             tpr_at_fprs_LLR.append(np.interp(target_fpr, fpr_LLR, tpr_LLR))
 

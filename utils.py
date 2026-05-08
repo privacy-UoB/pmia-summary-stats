@@ -150,6 +150,7 @@ def auc_scores(victim_pop, victim_pool, pop, pool, LR=False, p_values=True, FPR=
     # compare the true pop/pool placement to the predicted pop/pool placement
     y_true = np.concatenate((np.zeros(len(pvalue_pop)), np.ones(len(pvalue_pool))))
     y_score = np.concatenate((pvalue_pop, pvalue_pool))
+    
     aucs = roc_auc_score(y_true, y_score)
     fpr, tpr, thresholds = roc_curve(y_true, y_score)
 

@@ -4,7 +4,7 @@ import random
 from utils_datasets import load_dataset
 from utils import auc_scores, Gaussian_noise
 
-L1_or_LLR = "LLR"
+L1_or_LLR = "L1"
 error_bands = True
 fixed_FPR = True
 

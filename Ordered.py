@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from utils_datasets import load_dataset, separate_diseased_miRNAs, D1
+from utils_datasets import load_dataset, separate_diseased_miRNAs, D17
 from utils import auc_scores, fpr_power, LLR, L1, L1_threshold
 
 # paper: the demonstrated graphs showing roc curves
@@ -10,7 +10,7 @@ from utils import auc_scores, fpr_power, LLR, L1, L1_threshold
 
 stratifying = True
 fixed_FPR = True
-D = D1
+D = D17
 
 if stratifying == False:
     # load dataset
