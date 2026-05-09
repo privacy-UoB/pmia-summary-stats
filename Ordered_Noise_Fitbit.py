@@ -133,15 +133,15 @@ for count, m in enumerate(multiplier):
 
                 if fixed_FPR == True:
                     if len(tpr_at_fprs_LLR) >0:
-                        tpr_at_fpr_L1.append(np.average(tpr_at_fprs_LLR))
+                        tpr_at_fpr_LLR.append(np.average(tpr_at_fprs_LLR))
 
                 if error_bands == True:
                     auc_LLR_lower_bands.append(np.min(aucs_LLR, axis=0))
                     auc_LLR_upper_bands.append(np.max(aucs_LLR, axis=0))
 
                     if fixed_FPR == True:
-                        tpr_L1_lower_bands.append(np.min(tpr_at_fprs_LLR, axis=0))
-                        tpr_L1_upper_bands.append(np.max(tpr_at_fprs_LLR, axis=0))
+                        tpr_LLR_lower_bands.append(np.min(tpr_at_fprs_LLR, axis=0))
+                        tpr_LLR_upper_bands.append(np.max(tpr_at_fprs_LLR, axis=0))
 
     if L1_or_LLR == "L1":
         noise_fraction_L1.append(auc_L1)

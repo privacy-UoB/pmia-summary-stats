@@ -1,8 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, precision_score, confusion_matrix
-from utils_datasets import load_dataset
+from utils_datasets import _prepare_FitBit_per_id, _split_FitBit
 from utils import auc_scores
+
+# Hoist FitBit CSV parse + per-id grouping out of the outer loop;
+# only the pop/pool ShuffleSplit + per-timestamp aggregation re-runs per iteration.
+unique_ids_data, column_names = _prepare_FitBit_per_id()
 
 # pop, pool = load_FitBit_dataset()
 # print("fitbit pop", pop[1], "fitbit pool", pool[3])
@@ -32,9 +36,8 @@ for j in range (num_orders):
     # roc_curves_L1 = []
     # roc_curves_LLR = []
 
-    # load dataset
-    population, random_pool = load_dataset(FitBit=True)
-    # population, pool = load_dataset(psid=True)
+    # randomise the pop/pool split per iteration; CSV/grouping is reused from the prepare step above
+    population, random_pool = _split_FitBit(unique_ids_data, column_names)
 
     pop = population[0]
     pool = random_pool[0]

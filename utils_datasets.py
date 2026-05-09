@@ -149,8 +149,14 @@ def separate_diseased_miRNAs(D_label, dataset, with_independent_features=False):
 
     return o_pop, wo_pop, o_pool, wo_pool
 
-def load_timestamp_dataset(with_independent_miRNAs=False, withNaN=False, MiRNA_filter=None, correlation=None):
+def _prepare_timestamp_data(with_independent_miRNAs=False, withNaN=False, MiRNA_filter=None, correlation=None):
+    """Parse-once half of load_timestamp_dataset.
 
+    Returns the per-timepoint frames keyed by patient_id, the unique non-control
+    patient ids, the healthy_population frame, and a single random victim sample.
+    The patient-level ShuffleSplit lives in _split_timestamp so it can be re-run
+    per iteration without re-parsing the source matrix.
+    """
     # columns are 215 individuals, rows are 1026 (1205?) miRNAs
     df = pd.read_csv('Datasets/GSE68951_series_matrix.txt', skiprows=58, skipfooter=1, sep='\t', index_col=0)
 
@@ -275,6 +281,22 @@ def load_timestamp_dataset(with_independent_miRNAs=False, withNaN=False, MiRNA_f
         timepoint_i.append(t)
         print(t.shape)
 
+    return {
+        'timepoint_i': timepoint_i,
+        'unique_patient_id_nocontrol': unique_patient_id_nocontrol,
+        'healthy_population': healthy_population,
+        'sample_patient': sample_patient,
+    }
+
+def _split_timestamp(prepared):
+    """Split half of load_timestamp_dataset: re-run the patient-id ShuffleSplit
+    over a previously prepared bundle and produce the (pop, pool, sample, healthy)
+    quadruple."""
+    timepoint_i = prepared['timepoint_i']
+    unique_patient_id_nocontrol = prepared['unique_patient_id_nocontrol']
+    healthy_population = prepared['healthy_population']
+    sample_patient = prepared['sample_patient']
+
     # filter dataset via patient ids into distinct population and pool
     randomshuffle = ShuffleSplit(n_splits=1, test_size=18) # (test, train) = function -> matches ML train/test splitting order
     (pool_patients, pop_patients) = next(randomshuffle.split(unique_patient_id_nocontrol))
@@ -298,8 +320,17 @@ def load_timestamp_dataset(with_independent_miRNAs=False, withNaN=False, MiRNA_f
     print("pop shape", pop_timepoint_i[0].shape,
           "rpool shape", pool_timepoint_i[0].shape,
           "sample shape", sample_timepoint_i[0].shape)
-    
+
     return (pop_timepoint_i, pool_timepoint_i, sample_timepoint_i, healthy_population)
+
+def load_timestamp_dataset(with_independent_miRNAs=False, withNaN=False, MiRNA_filter=None, correlation=None):
+    prepared = _prepare_timestamp_data(
+        with_independent_miRNAs=with_independent_miRNAs,
+        withNaN=withNaN,
+        MiRNA_filter=MiRNA_filter,
+        correlation=correlation,
+    )
+    return _split_timestamp(prepared)
 
 def drop_timestamp_index(pop, pool, sample=None, healthy=None):
     for idx in range(len(pop)):
@@ -419,15 +450,10 @@ def independent(pop_timestamps, pool_timestamps, separate_timestamps=False, prin
     # return (pop_dataframe, pool_dataframe, result, independent_columns)
     return pop_dataframe, pool_dataframe
 
-def load_FitBit_dataset(pool_size=None):
-
+def _prepare_FitBit_per_id():
     # 15 columns are activities, 457 rows are people's IDs
     df = pd.read_csv('Datasets/dailyActivity_merged.csv', sep=',')
-    # check last column \n can be removed
 
-    population = df
-
-    # create list of only ids
     column_names = df.columns
     ids = df["Id"]
     ids = [int(x) for x in ids] # remove "'" from each id
@@ -436,74 +462,48 @@ def load_FitBit_dataset(pool_size=None):
     # get dataframe for each unique_id
     unique_ids_data = []
     for person in unique_id:
-        x = population[(population["Id"] == person)]
+        x = df[(df["Id"] == person)]
         unique_ids_data.append(x)
 
-    # TODO replace activitydate by range of length for each unique id. This will be the new timestamp
-        
-    # create random sample of ids for pop and pool
+    return unique_ids_data, column_names
+
+def _build_FitBit_timestamps(indices, unique_ids_data, column_names):
+    selected = [unique_ids_data[i] for i in indices]
+
+    max_entries = 0
+    for i in selected:
+        size = len(i)
+        if max_entries < size:
+            max_entries = size
+
+    out = []
+    for i in range(max_entries):
+        ts_i = pd.DataFrame(columns=column_names, index=[0])
+        for j in selected:
+            if i < len(j):
+                ts_i = pd.concat([ts_i, j.iloc[i].to_frame().T], ignore_index=True)
+        ts_i = ts_i.iloc[1:]
+        ts_i = ts_i.set_index('Id')
+        ts_i = ts_i.drop(columns=["ActivityDate", "LoggedActivitiesDistance", "SedentaryActiveDistance"])
+        ts_i = ts_i.apply(pd.to_numeric)
+        out.append(ts_i)
+    return out
+
+def _split_FitBit(unique_ids_data, column_names, pool_size=None):
     a = 27 if pool_size is None else pool_size
     randomshuffle = ShuffleSplit(n_splits=1, test_size=a)
     (pool, pop) = next(randomshuffle.split(unique_ids_data))
-    
-    # create list of 27 dataframes for each pop id
-    pop_data = []
-    for pop_index in pop:
-        x = unique_ids_data[pop_index]
-        pop_data.append(x)
 
-    # find maximum number of data submissions in pop
-    max_pop_entries = 0
-    for i in pop_data:
-        size = len(i)
-        if max_pop_entries < size:
-            max_pop_entries = size
-
-# TODO filter by timestamp date based on range
-    pop_timestamp = []
-    for i in range(max_pop_entries):
-        pop_timestamp_i = pd.DataFrame(columns=column_names, index=[0])
-
-        for j in pop_data:
-            if i < len(j):
-                timestamp_i = j.iloc[i]
-                pop_timestamp_i = pd.concat([pop_timestamp_i, timestamp_i.to_frame().T], ignore_index=True)
-        pop_timestamp_i = pop_timestamp_i.iloc[1:]
-        pop_timestamp_i = pop_timestamp_i.set_index('Id') 
-        pop_timestamp_i = pop_timestamp_i.drop(columns=["ActivityDate", "LoggedActivitiesDistance", "SedentaryActiveDistance"]) # quick fix, excluded "Calories\n" from drop
-        pop_timestamp_i = pop_timestamp_i.apply(pd.to_numeric)
-        pop_timestamp.append(pop_timestamp_i) #pop_timestamp_i.to_numpy()
-
-    # create list of 8 dataframes for each pool id
-    pool_data = []
-    for pool_index in pool:
-        x = unique_ids_data[pool_index]
-        pool_data.append(x)
-
-    # find maximum number of data submissions in pool
-    max_pool_entries = 0
-    for i in pool_data:
-        size = len(i)
-        if max_pool_entries < size:
-            max_pool_entries = size
-
-    pool_timestamp = []
-    for i in range(max_pool_entries):
-        pool_timestamp_i = pd.DataFrame(columns=column_names, index=[0])
-
-        for j in pool_data:
-            if i < len(j):
-                timestamp_i = j.iloc[i]
-                pool_timestamp_i = pd.concat([pool_timestamp_i, timestamp_i.to_frame().T], ignore_index=True)
-        pool_timestamp_i = pool_timestamp_i.iloc[1:] # why is this suddenly 16 columns?? seems to be +1 column: "Calories\n"
-        pool_timestamp_i = pool_timestamp_i.set_index('Id')
-        pool_timestamp_i = pool_timestamp_i.drop(columns=["ActivityDate", "LoggedActivitiesDistance", "SedentaryActiveDistance"]) # quick fix, excluded "Calories\n" from drop
-        pool_timestamp_i = pool_timestamp_i.apply(pd.to_numeric)
-        pool_timestamp.append(pool_timestamp_i) #pool_timestamp_i.to_numpy()
+    pop_timestamp = _build_FitBit_timestamps(pop, unique_ids_data, column_names)
+    pool_timestamp = _build_FitBit_timestamps(pool, unique_ids_data, column_names)
 
     # pop time 0-7=30; 8=27; 9=25; 10=21; 11=19; 12-13=6; 14=5; 15-18=4; 19-31=2
     # pool time 0-11=5; 12-14=2
     return pop_timestamp, pool_timestamp
+
+def load_FitBit_dataset(pool_size=None):
+    unique_ids_data, column_names = _prepare_FitBit_per_id()
+    return _split_FitBit(unique_ids_data, column_names, pool_size=pool_size)
 
 def load_electricity_dataset():
 

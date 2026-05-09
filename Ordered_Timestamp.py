@@ -4,7 +4,7 @@ import random
 from scipy import stats
 from sklearn.preprocessing import normalize
 from tabulate import tabulate
-from utils_datasets import load_dataset, separate_diseased_miRNAs, independent, D2
+from utils_datasets import load_dataset, separate_diseased_miRNAs, independent, D2, _prepare_timestamp_data, _split_timestamp, drop_timestamp_index
 from utils import auc_scores, normalise, Gaussian_noise, L1
 
 include_synthetic_noise = True
@@ -64,7 +64,13 @@ if include_tabulate:
         else:
             result = len([n for n in person if n>0])
         return result
-        
+
+
+# Hoist timestamp CSV parse + independent-feature filter out of the outer loop;
+# only the patient-id ShuffleSplit re-runs per iteration.
+if stratifying == False:
+    _prepared_timestamp = _prepare_timestamp_data(with_independent_miRNAs=True)
+
 
 # for loop for numorder lots of train/test, then average at end
 for j in range (num_orders):
@@ -84,9 +90,10 @@ for j in range (num_orders):
             fprs_syntheticL1 = []
             fprs_syntheticLLR = []
 
-    # load new partitioned dataset each time we call num_orders
+    # re-randomise pop/pool split each iteration; CSV parse is reused from above
     if stratifying == False:
-        ti_pop, ti_pool = load_dataset(timestamp=True, with_independent_features=True)
+        ti_pop, ti_pool, _sample_t, _healthy_t = _split_timestamp(_prepared_timestamp)
+        ti_pop, ti_pool = drop_timestamp_index(ti_pop, ti_pool)
     # ti_pop, ti_pool, statistics, independent_columns = independent(ti_pop, ti_pool, correlation=0.8)
     # ti_pop, ti_pool = independent(ti_pop, ti_pool, correlation=0.9)
 
@@ -401,8 +408,8 @@ for j in range (num_orders):
             aucs_syntheticLLR.append(roc_synthLLR)
 
             if fixed_FPR == True:
-                fpr_synthL1, tpr_synthL1, thresholds_synthL1 = auc_scores(t_pop, t_pool, pop, pool, FPR=True)
-                fpr_synthLLR, tpr_synthLLR, thresholds_synthLLR = auc_scores(t_pop, t_pool, pop, pool, LR=True, FPR=True)
+                fpr_synthL1, tpr_synthL1, thresholds_synthL1 = auc_scores(noisy_pop, noisy_pool, pop, pool, FPR=True)
+                fpr_synthLLR, tpr_synthLLR, thresholds_synthLLR = auc_scores(noisy_pop, noisy_pool, pop, pool, LR=True, FPR=True)
 
                 # TPR at a fixed FPR (e.g., 0.01 = 1%)
                 target_fpr = 1e-2
@@ -579,8 +586,8 @@ if include_synthetic_noise:
     ax1.plot(range(len(auc_syntheticLLR)), auc_syntheticLLR, colours1[3], linewidth=2.0, label="AUC LLR synth")
 
     if fixed_FPR:
-        ax2.plot(range(len(fpr_syntheticL1)), fpr_L1[:6], colours2[0], linewidth=2.0, label="fpr L1 real")
-        ax2.plot(range(len(fpr_syntheticLLR)), fpr_LLR[:6], colours2[1], linewidth=2.0, label="fpr LLR real")
+        ax2.plot(range(len(fpr_syntheticL1)), tpr_at_fpr_L1[:6], colours2[0], linewidth=2.0, label="fpr L1 real")
+        ax2.plot(range(len(fpr_syntheticLLR)), tpr_at_fpr_LLR[:6], colours2[1], linewidth=2.0, label="fpr LLR real")
         ax2.plot(range(len(fpr_syntheticL1)), fpr_syntheticL1, colours2[2], linewidth=2.0, label="fpr L1 synth")
         ax2.plot(range(len(fpr_syntheticLLR)), fpr_syntheticLLR, colours2[3], linewidth=2.0, label="fpr LLR synth")
 

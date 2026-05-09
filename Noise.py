@@ -236,7 +236,7 @@ else:
             elif L1_or_LLR == "LLR":
                 ax1.plot(multiplier, noisy_longitudinals_LLR[l], colours1[1], linewidth=2.0, label=f"LLR AUC timestamp {l}")
                 if fixed_FPR == True:
-                    ax2.plot(multiplier, noisy_longitudinals_tpr_L1[l], colours2[1], linewidth=2.0, label=f"LLR tpr timestamp {l}")
+                    ax2.plot(multiplier, noisy_longitudinals_tpr_LLR[l], colours2[1], linewidth=2.0, label=f"LLR tpr timestamp {l}")
 
 ax1.legend(loc='upper right')
 if fixed_FPR == True:
