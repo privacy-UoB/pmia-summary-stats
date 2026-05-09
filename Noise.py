@@ -1,11 +1,108 @@
 import sys
 import numpy as np
 import matplotlib
-if len(sys.argv) >= 6:
+
+from experiment_io import parse_flags, seed_all, save_figdata, load_figdata
+
+_flags = parse_flags(sys.argv)
+seed_all(_flags["seed"])
+
+if len(sys.argv) >= 6 or _flags["replot"]:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from utils_datasets import load_dataset, D3, D17
 from utils import auc_scores, Gaussian_noise
+
+
+def make_figure(data: dict, output_path: str | None) -> None:
+    multiplier = np.asarray(data["multiplier"])
+    fixed_FPR = bool(np.asarray(data["_fixed_FPR"]).item())
+    include_longitudinals = bool(np.asarray(data["_include_longitudinals"]).item())
+    error_bands = bool(np.asarray(data["_error_bands"]).item())
+    L1_or_LLR = str(np.asarray(data["_L1_or_LLR"]).item())
+    iterations = int(np.asarray(data["_iterations"]).item())
+
+    fig, ax1 = plt.subplots()
+    colours1 = ["cornflowerblue", "gold"]
+    if fixed_FPR:
+        ax2 = ax1.twinx()
+        colours2 = ["mediumblue", "orange"]
+
+    if not include_longitudinals:
+        auc_L1 = np.asarray(data["auc_L1"])
+        auc_LLR = np.asarray(data["auc_LLR"])
+        ax1.plot(multiplier, auc_L1, colours1[0], linewidth=2.0, label="L1 AUC")
+        ax1.plot(multiplier, auc_LLR, colours1[1], linewidth=2.0, label="LLR AUC")
+        if fixed_FPR:
+            tpr_at_fpr_L1 = np.asarray(data["tpr_at_fpr_L1"])
+            tpr_at_fpr_LLR = np.asarray(data["tpr_at_fpr_LLR"])
+            ax2.plot(multiplier, tpr_at_fpr_L1, colours2[0], linewidth=2.0, label="L1 tpr")
+            ax2.plot(multiplier, tpr_at_fpr_LLR, colours2[1], linewidth=2.0, label="LLR tpr")
+    else:
+        noisy_longitudinals_L1 = [list(row) for row in np.asarray(data["noisy_longitudinals_L1"], dtype=object)]
+        noisy_longitudinals_LLR = [list(row) for row in np.asarray(data["noisy_longitudinals_LLR"], dtype=object)]
+        if fixed_FPR:
+            noisy_longitudinals_tpr_L1 = [list(row) for row in np.asarray(data["noisy_longitudinals_tpr_L1"], dtype=object)]
+            noisy_longitudinals_tpr_LLR = [list(row) for row in np.asarray(data["noisy_longitudinals_tpr_LLR"], dtype=object)]
+
+        if error_bands:
+            transposed_L1 = [list(s) for s in zip(*noisy_longitudinals_L1)]
+            transposed_LLR = [list(s) for s in zip(*noisy_longitudinals_LLR)]
+            mm_L1 = [[np.average(i) for i in transposed_L1],
+                     [np.min(j) for j in transposed_L1],
+                     [np.max(k) for k in transposed_L1]]
+            mm_LLR = [[np.average(i) for i in transposed_LLR],
+                      [np.min(j) for j in transposed_LLR],
+                      [np.max(k) for k in transposed_LLR]]
+
+            ax1.plot(multiplier, mm_L1[0], colours1[0], linewidth=2.0, label="L1 AUC")
+            ax1.fill_between(multiplier, mm_L1[1], mm_L1[2], alpha=0.2)
+            ax1.plot(multiplier, mm_LLR[0], colours1[1], linewidth=2.0, label="LLR AUC")
+            ax1.fill_between(multiplier, mm_LLR[1], mm_LLR[2], alpha=0.2)
+
+            if fixed_FPR:
+                tt_L1 = [list(s) for s in zip(*noisy_longitudinals_tpr_L1)]
+                tt_LLR = [list(s) for s in zip(*noisy_longitudinals_tpr_LLR)]
+                mm_tpr_L1 = [[np.average(i) for i in tt_L1],
+                             [np.min(j) for j in tt_L1],
+                             [np.max(k) for k in tt_L1]]
+                mm_tpr_LLR = [[np.average(i) for i in tt_LLR],
+                              [np.min(j) for j in tt_LLR],
+                              [np.max(k) for k in tt_LLR]]
+                ax2.plot(multiplier, mm_tpr_L1[0], colours2[0], linewidth=2.0, label="L1 tpr")
+                ax2.fill_between(multiplier, mm_tpr_L1[1], mm_tpr_L1[2], alpha=0.2)
+                ax2.plot(multiplier, mm_tpr_LLR[0], colours2[1], linewidth=2.0, label="LLR tpr")
+                ax2.fill_between(multiplier, mm_tpr_LLR[1], mm_tpr_LLR[2], alpha=0.2)
+        else:
+            for l in range(iterations):
+                if L1_or_LLR == "L1":
+                    ax1.plot(multiplier, noisy_longitudinals_L1[l], colours1[0], linewidth=2.0, label=f"L1 AUC timestamp {l}")
+                    if fixed_FPR:
+                        ax2.plot(multiplier, noisy_longitudinals_tpr_L1[l], colours2[0], linewidth=2.0, label=f"L1 tpr timestamp {l}")
+                elif L1_or_LLR == "LLR":
+                    ax1.plot(multiplier, noisy_longitudinals_LLR[l], colours1[1], linewidth=2.0, label=f"LLR AUC timestamp {l}")
+                    if fixed_FPR:
+                        ax2.plot(multiplier, noisy_longitudinals_tpr_LLR[l], colours2[1], linewidth=2.0, label=f"LLR tpr timestamp {l}")
+
+    ax1.legend(loc='upper right')
+    if fixed_FPR:
+        h1, l1 = ax1.get_legend_handles_labels()
+        h2, l2 = ax2.get_legend_handles_labels()
+        ax1.legend(h1 + h2, l1 + l2, loc='upper right')
+        ax2.set_ylabel("TPR at 0.01 FPR")
+
+    ax1.set_xscale("log")
+    ax1.set_xlabel("noise scale")
+    ax1.set_ylabel("AUC scores")
+    ax1.set_ylim([0.45, 1])
+    ax1.grid(True)
+
+    if output_path:
+        plt.savefig(output_path)
+        print(f"Saved to {output_path}")
+    else:
+        plt.show()
+
 
 # CLI: python Noise.py <dataset> <include_deviations> <disease> <pop_idx> <pool_idx> [random_sample_size] [output.pdf]
 # Falls back to interactive defaults when no args given.
@@ -26,6 +123,12 @@ else:
     POOL_IDX = 1
     RANDOM_SAMPLE_SIZE = None
     OUTPUT_FILE = None
+
+# Replot mode: skip computation, redraw from a saved dump.
+if _flags["replot"]:
+    data, _meta = load_figdata(_flags["replot"])
+    make_figure(data, OUTPUT_FILE)
+    sys.exit(0)
 
 fixed_FPR = True
 include_longitudinals = True if dataset != "miRNA" else False
@@ -68,23 +171,6 @@ elif dataset == "Electricity":
     population, chosen_pool = load_dataset(electricity=True)
     multiplier = ranges[2]
 
-# for x, y in zip(ti_pop, ti_pool):
-    # for row in range(len(x)):
-    #     (x.iloc[row]).dropna(inplace=True) # remove NaN rows from the dataframe
-    # print(x)
-    # for row in range(len(y)):
-    #     (y.iloc[row]).dropna() # remove NaN rows from the dataframe
-
-# for i in range(8):
-#     for row in range(len(ti_pop[i])):
-#         (ti_pop[i].iloc[row]).dropna(inplace=True) # remove NaN rows from the dataframe
-#         print(ti_pop[i])
-#     for row in range(len(ti_pool[i])):
-#         (ti_pool[i].iloc[row]).dropna() # remove NaN rows from the dataframe
-    
-# This isn't working because it's 'a value is trying to be set on a copy of a slice from a DataFrame'?????
-    # so why is the above for x, y in zip() working?!?!??
-
 if include_longitudinals:
     noisy_longitudinals_L1 = []
     noisy_longitudinals_LLR = []
@@ -95,11 +181,15 @@ if include_longitudinals:
     error_bands = True # if we wish to include min/max AUC scores over all iterations
     if error_bands == False:
         L1_or_LLR = "LLR" # graph is too messy with all longitudinals over both L1 and LLR
-    
+
     if dataset == "FitBit":
         iterations = 8
     else:
         iterations = len(population)
+else:
+    error_bands = False
+
+L1_or_LLR = locals().get("L1_or_LLR", "LLR")
 
 for i in range(iterations): # multiple if include_longitudinals, 1 otherwise
     auc_L1 = []
@@ -154,7 +244,7 @@ for i in range(iterations): # multiple if include_longitudinals, 1 otherwise
                 target_fpr = 1e-2
                 tpr_at_fprs_L1.append(np.interp(target_fpr, fpr_L1, tpr_L1))
                 tpr_at_fprs_LLR.append(np.interp(target_fpr, fpr_LLR, tpr_LLR))
-        
+
         # num_order rows of datasets, columns are each longitudinal entry
         if len(aucs_L1) >0:
             auc_L1.append(np.average(aucs_L1))
@@ -168,7 +258,7 @@ for i in range(iterations): # multiple if include_longitudinals, 1 otherwise
 
             if len(tpr_at_fprs_LLR) >0:
                 tpr_at_fpr_LLR.append(np.average(tpr_at_fprs_LLR))
-        
+
     if include_longitudinals:
         noisy_longitudinals_L1.append(auc_L1)
         noisy_longitudinals_LLR.append(auc_LLR)
@@ -176,86 +266,43 @@ for i in range(iterations): # multiple if include_longitudinals, 1 otherwise
             noisy_longitudinals_tpr_L1.append(tpr_at_fpr_L1)
             noisy_longitudinals_tpr_LLR.append(tpr_at_fpr_LLR)
 
-# plots!
-fig, ax1 = plt.subplots()
-colours1 = ["cornflowerblue", "gold"]
-if fixed_FPR == True:
-    ax2 = ax1.twinx()
-    colours2 = ["mediumblue", "orange"]
-
-# plotting the performance of the inference for one timestamp over noise
+# Build the figure-data dict and save before plotting.
+data = {
+    "multiplier": np.asarray(multiplier),
+    "_fixed_FPR": fixed_FPR,
+    "_include_longitudinals": include_longitudinals,
+    "_error_bands": error_bands,
+    "_L1_or_LLR": L1_or_LLR,
+    "_iterations": iterations,
+}
 if not include_longitudinals:
-    ax1.plot(multiplier, auc_L1, colours1[0], linewidth=2.0, label="L1 AUC")
-    ax1.plot(multiplier, auc_LLR, colours1[1], linewidth=2.0, label="LLR AUC")
-    if fixed_FPR == True:
-        ax2.plot(multiplier, tpr_at_fpr_L1, colours2[0], linewidth=2.0, label="L1 tpr")
-        ax2.plot(multiplier, tpr_at_fpr_LLR, colours2[1], linewidth=2.0, label="LLR tpr")
-
-# plotting the performance of the inference for each of the longitudinal datasets over noise
+    data["auc_L1"] = np.asarray(auc_L1)
+    data["auc_LLR"] = np.asarray(auc_LLR)
+    if fixed_FPR:
+        data["tpr_at_fpr_L1"] = np.asarray(tpr_at_fpr_L1)
+        data["tpr_at_fpr_LLR"] = np.asarray(tpr_at_fpr_LLR)
 else:
-    if error_bands:
-        zipped_L1 = zip(*noisy_longitudinals_L1)
-        zipped_LLR = zip(*noisy_longitudinals_LLR)
-        transposed_L1 = [list(sublist) for sublist in zipped_L1]
-        transposed_LLR = [list(sublist) for sublist in zipped_LLR]
-        noisy_longitudinals_meanminmax_L1 = [[np.average(i) for i in transposed_L1], 
-                                    [np.min(j) for j in transposed_L1],
-                                    [np.max(k) for k in transposed_L1]]
-        noisy_longitudinals_meanminmax_LLR = [[np.average(i) for i in transposed_LLR], 
-                                    [np.min(j) for j in transposed_LLR],
-                                    [np.max(k) for k in transposed_LLR]]
+    data["noisy_longitudinals_L1"] = np.asarray(noisy_longitudinals_L1, dtype=object)
+    data["noisy_longitudinals_LLR"] = np.asarray(noisy_longitudinals_LLR, dtype=object)
+    if fixed_FPR:
+        data["noisy_longitudinals_tpr_L1"] = np.asarray(noisy_longitudinals_tpr_L1, dtype=object)
+        data["noisy_longitudinals_tpr_LLR"] = np.asarray(noisy_longitudinals_tpr_LLR, dtype=object)
 
-        ax1.plot(multiplier, noisy_longitudinals_meanminmax_L1[0], colours1[0], linewidth=2.0, label=f"L1 AUC")
-        ax1.fill_between(multiplier, noisy_longitudinals_meanminmax_L1[1], noisy_longitudinals_meanminmax_L1[2], alpha=0.2)
-        ax1.plot(multiplier, noisy_longitudinals_meanminmax_LLR[0], colours1[1], linewidth=2.0, label=f"LLR AUC")
-        ax1.fill_between(multiplier, noisy_longitudinals_meanminmax_LLR[1], noisy_longitudinals_meanminmax_LLR[2], alpha=0.2)
-
-        if fixed_FPR == True:
-            zipped_tpr_L1 = zip(*noisy_longitudinals_tpr_L1)
-            zipped_tpr_LLR = zip(*noisy_longitudinals_tpr_LLR)
-            transposed_tpr_L1 = [list(sublist) for sublist in zipped_tpr_L1]
-            transposed_tpr_LLR = [list(sublist) for sublist in zipped_tpr_LLR]
-            noisy_longitudinals_meanminmax_tpr_L1 = [[np.average(i) for i in transposed_tpr_L1], 
-                                        [np.min(j) for j in transposed_tpr_L1],
-                                        [np.max(k) for k in transposed_tpr_L1]]
-            noisy_longitudinals_meanminmax_tpr_LLR = [[np.average(i) for i in transposed_tpr_LLR], 
-                                        [np.min(j) for j in transposed_tpr_LLR],
-                                        [np.max(k) for k in transposed_tpr_LLR]]
-
-            ax2.plot(multiplier, noisy_longitudinals_meanminmax_tpr_L1[0], colours2[0], linewidth=2.0, label=f"L1 tpr")
-            ax2.fill_between(multiplier, noisy_longitudinals_meanminmax_tpr_L1[1], noisy_longitudinals_meanminmax_tpr_L1[2], alpha=0.2)
-            ax2.plot(multiplier, noisy_longitudinals_meanminmax_tpr_LLR[0], colours2[1], linewidth=2.0, label=f"LLR tpr")
-            ax2.fill_between(multiplier, noisy_longitudinals_meanminmax_tpr_LLR[1], noisy_longitudinals_meanminmax_tpr_LLR[2], alpha=0.2)
-    
-    else:
-        for l in range(iterations):
-            if L1_or_LLR == "L1":
-                ax1.plot(multiplier, noisy_longitudinals_L1[l], colours1[0], linewidth=2.0, label=f"L1 AUC timestamp {l}")
-                if fixed_FPR == True:
-                    ax2.plot(multiplier, noisy_longitudinals_tpr_L1[l], colours2[0], linewidth=2.0, label=f"L1 tpr timestamp {l}")
-            elif L1_or_LLR == "LLR":
-                ax1.plot(multiplier, noisy_longitudinals_LLR[l], colours1[1], linewidth=2.0, label=f"LLR AUC timestamp {l}")
-                if fixed_FPR == True:
-                    ax2.plot(multiplier, noisy_longitudinals_tpr_LLR[l], colours2[1], linewidth=2.0, label=f"LLR tpr timestamp {l}")
-
-ax1.legend(loc='upper right')
-if fixed_FPR == True:
-    # Merge handles and labels
-    h1, l1 = ax1.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-
-    # Add combined legend to one axis
-    ax1.legend(h1 + h2, l1 + l2, loc='upper right')
-    ax2.set_ylabel("TPR at 0.01 FPR")
-
-ax1.set_xscale("log")
-ax1.set_xlabel("noise scale")
-ax1.set_ylabel("AUC scores")
-ax1.set_ylim([0.45, 1]) # enables comparable auc scores between L1 and LLR
-ax1.grid(True)
+meta = {
+    "seed": _flags["seed"],
+    "dataset": dataset,
+    "disease": sys.argv[3] if len(sys.argv) >= 4 else None,
+    "pop_idx": POP_IDX,
+    "pool_idx": POOL_IDX,
+    "random_sample_size": RANDOM_SAMPLE_SIZE,
+    "include_deviations": include_deviations,
+    "fixed_FPR": fixed_FPR,
+    "include_longitudinals": include_longitudinals,
+    "num_orders": num_orders,
+    "iterations": iterations,
+}
 
 if OUTPUT_FILE:
-    plt.savefig(OUTPUT_FILE)
-    print(f"Saved to {OUTPUT_FILE}")
-else:
-    plt.show()
+    save_figdata(OUTPUT_FILE, data, meta)
+
+make_figure(data, OUTPUT_FILE)

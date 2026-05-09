@@ -14,6 +14,9 @@ uv sync
 
 mkdir -p runs
 
+# Optional seed override (defaults to 42 in each Python script).
+SEED_ARG=${SEED:+--seed $SEED}
+
 # Define experiments: disease metric pool_idx random_sample_size output_file
 declare -A EXP_DISEASE EXP_METRIC EXP_POOL EXP_SAMPLE EXP_OUTPUT
 # 10a/10b: D3 case pool L1+LLR; 11a/11b: D3 random pool L1+LLR (sample=_ -> n=65 default)
@@ -43,7 +46,7 @@ for key in $KEYS; do
     log="runs/log_ordered_${key}_${disease}_${metric}_${pool}.txt"
 
     echo "[$key] Starting: $disease $metric pool=$pool sample=$sample -> $output (log: $log)"
-    uv run python Ordered_Noise.py "$disease" "$metric" "$pool" "$sample" "$output" > "$log" 2>&1 &
+    uv run python Ordered_Noise.py "$disease" "$metric" "$pool" "$sample" "$output" $SEED_ARG > "$log" 2>&1 &
     PIDS+=($!)
 done
 

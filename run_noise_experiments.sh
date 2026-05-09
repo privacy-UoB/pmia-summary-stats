@@ -14,6 +14,9 @@ uv sync
 
 mkdir -p runs
 
+# Optional seed override (defaults to 42 in each Python script).
+SEED_ARG=${SEED:+--seed $SEED}
+
 # Define experiments: dataset include_deviations disease pop_idx pool_idx random_sample_size output_file
 declare -A EXP_DATASET EXP_DEVS EXP_DISEASE EXP_POP EXP_POOL EXP_SAMPLE EXP_OUTPUT
 # Keys: a/d/g/h = Fig 2a/2b/2c/2d; b/e = Fig 9a/9b (D17, alpha*sigma_j per paper caption)
@@ -49,7 +52,7 @@ for key in $KEYS; do
     log="runs/log_noise_${key}.txt"
 
     echo "[$key] Starting: $dataset devs=$devs disease=$disease pop=$pop pool=$pool sample=$sample -> $output (log: $log)"
-    uv run python Noise.py "$dataset" "$devs" "$disease" "$pop" "$pool" "$sample" "$output" > "$log" 2>&1 &
+    uv run python Noise.py "$dataset" "$devs" "$disease" "$pop" "$pool" "$sample" "$output" $SEED_ARG > "$log" 2>&1 &
     PIDS+=($!)
 done
 

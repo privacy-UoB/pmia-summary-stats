@@ -1,12 +1,70 @@
 import sys
 import numpy as np
 import matplotlib
-if len(sys.argv) >= 4:
+
+from experiment_io import parse_flags, seed_all, save_figdata, load_figdata
+
+_flags = parse_flags(sys.argv)
+seed_all(_flags["seed"])
+
+if len(sys.argv) >= 4 or _flags["replot"]:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import random
 from utils_datasets import load_dataset, separate_diseased_miRNAs, D3, D17
 from utils import auc_scores, Gaussian_noise
+
+
+def make_figure(data: dict, output_path: str | None) -> None:
+    multiplier = list(np.asarray(data["multiplier"]))
+    num_miRNAs = list(np.asarray(data["num_miRNAs"]))
+    fixed_FPR = bool(np.asarray(data["_fixed_FPR"]).item())
+    L1_or_LLR = str(np.asarray(data["_L1_or_LLR"]).item())
+
+    fig, ax1 = plt.subplots()
+    colours1 = ["cornflowerblue", "gold", "springgreen", "red", "mediumpurple"]
+    if fixed_FPR:
+        ax2 = ax1.twinx()
+        colours2 = ["mediumblue", "orange", "green", "brown", "purple"]
+
+    if L1_or_LLR == "L1":
+        noise_fraction_L1 = [list(row) for row in np.asarray(data["noise_fraction_L1"], dtype=object)]
+        if fixed_FPR:
+            noise_fraction_tpr_at_fpr_L1 = [list(row) for row in np.asarray(data["noise_fraction_tpr_at_fpr_L1"], dtype=object)]
+    else:
+        noise_fraction_LLR = [list(row) for row in np.asarray(data["noise_fraction_LLR"], dtype=object)]
+        if fixed_FPR:
+            noise_fraction_tpr_at_fpr_LLR = [list(row) for row in np.asarray(data["noise_fraction_tpr_at_fpr_LLR"], dtype=object)]
+
+    for index, noise in enumerate(multiplier):
+        if L1_or_LLR == "L1":
+            ax1.plot(num_miRNAs, noise_fraction_L1[index], colours1[index], linewidth=2.0, label=f"AUC Std. dev. = {noise}")
+            if fixed_FPR:
+                ax2.plot(num_miRNAs, noise_fraction_tpr_at_fpr_L1[index], colours2[index], linewidth=2.0, label=f"AUC Std. dev. = {noise}")
+        elif L1_or_LLR == "LLR":
+            ax1.plot(num_miRNAs, noise_fraction_LLR[index], colours1[index], linewidth=2.0, label=f"fpr Std. dev. = {noise}")
+            if fixed_FPR:
+                ax2.plot(num_miRNAs, noise_fraction_tpr_at_fpr_LLR[index], colours2[index], linewidth=2.0, label=f"fpr Std. dev. = {noise}")
+
+    ax1.legend(loc='upper right')
+    if fixed_FPR:
+        h1, l1 = ax1.get_legend_handles_labels()
+        h2, l2 = ax2.get_legend_handles_labels()
+        ax1.legend(h1 + h2, l1 + l2, loc='upper right')
+        ax2.set_ylabel("TPR at 0.01 FPR")
+
+    ax1.invert_xaxis()
+    ax1.set_xlabel("number miRNAs")
+    ax1.set_ylabel("AUC scores")
+    ax1.set_ylim([0.3, 1])
+    ax1.grid(True)
+
+    if output_path:
+        plt.savefig(output_path)
+        print(f"Saved to {output_path}")
+    else:
+        plt.show()
+
 
 # CLI: python Ordered_Noise.py <disease> <metric> <pool_idx> [random_sample_size] [output.pdf]
 # Falls back to interactive defaults when no args given.
@@ -23,6 +81,11 @@ else:
     POOL_IDX = 1
     RANDOM_SAMPLE_SIZE = None
     OUTPUT_FILE = None
+
+if _flags["replot"]:
+    data, _meta = load_figdata(_flags["replot"])
+    make_figure(data, OUTPUT_FILE)
+    sys.exit(0)
 
 # paper: the demonstrated graphs showing roc curves
     # 1st: 50 subsets of n/1049 different individuals (n = 35, 65, 124)
@@ -151,48 +214,34 @@ for count, m in enumerate(multiplier):
     # Free memory before next multiplier
     del nonneg_noised_pops, nonneg_noised_pools
 
-# plots!
-fig, ax1 = plt.subplots()
-colours1 = ["cornflowerblue", "gold", "springgreen", "red", "mediumpurple"]
-if fixed_FPR == True:
-    ax2 = ax1.twinx()
-    colours2 = ["mediumblue", "orange", "green", "brown", "purple"]
+# Build the figure-data dict and save before plotting.
+data = {
+    "multiplier": np.asarray(multiplier),
+    "num_miRNAs": np.asarray(num_miRNAs),
+    "_fixed_FPR": fixed_FPR,
+    "_L1_or_LLR": L1_or_LLR,
+}
+if L1_or_LLR == "L1":
+    data["noise_fraction_L1"] = np.asarray(noise_fraction_L1, dtype=object)
+    if fixed_FPR:
+        data["noise_fraction_tpr_at_fpr_L1"] = np.asarray(noise_fraction_tpr_at_fpr_L1, dtype=object)
+else:
+    data["noise_fraction_LLR"] = np.asarray(noise_fraction_LLR, dtype=object)
+    if fixed_FPR:
+        data["noise_fraction_tpr_at_fpr_LLR"] = np.asarray(noise_fraction_tpr_at_fpr_LLR, dtype=object)
 
-for index, noise in enumerate(multiplier):
-    if L1_or_LLR == "L1":
-        # Left-hand x axis for AUC scores
-        ax1.plot(num_miRNAs, noise_fraction_L1[index], colours1[index], linewidth=2.0, label=f"AUC Std. dev. = {noise}")
-
-        # Right hand x axis for TPR at fixed FPR
-        if fixed_FPR == True:
-            ax2.plot(num_miRNAs, noise_fraction_tpr_at_fpr_L1[index], colours2[index], linewidth=2.0, label=f"AUC Std. dev. = {noise}")
-
-    elif L1_or_LLR == "LLR":
-        # Left-hand x axis for AUC scores
-        ax1.plot(num_miRNAs, noise_fraction_LLR[index], colours1[index], linewidth=2.0, label=f"fpr Std. dev. = {noise}")
-
-        # Right hand x axis for TPR at fixed FPR
-        if fixed_FPR == True:
-            ax2.plot(num_miRNAs, noise_fraction_tpr_at_fpr_LLR[index], colours2[index], linewidth=2.0, label=f"fpr Std. dev. = {noise}")
-
-ax1.legend(loc='upper right')
-if fixed_FPR == True:
-    # Merge handles and labels
-    h1, l1 = ax1.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-
-    # Add combined legend to one axis
-    ax1.legend(h1 + h2, l1 + l2, loc='upper right')
-    ax2.set_ylabel("TPR at 0.01 FPR")
-
-ax1.invert_xaxis()
-ax1.set_xlabel("number miRNAs")
-ax1.set_ylabel("AUC scores")
-ax1.set_ylim([0.3,1]) # enables comparable auc scores between L1 and LLR
-ax1.grid(True)
+meta = {
+    "seed": _flags["seed"],
+    "disease": sys.argv[1] if len(sys.argv) >= 2 else None,
+    "L1_or_LLR": L1_or_LLR,
+    "pool_idx": POOL_IDX,
+    "random_sample_size": RANDOM_SAMPLE_SIZE,
+    "fixed_FPR": fixed_FPR,
+    "num_orders": num_orders,
+    "stratifying": stratifying,
+}
 
 if OUTPUT_FILE:
-    plt.savefig(OUTPUT_FILE)
-    print(f"Saved to {OUTPUT_FILE}")
-else:
-    plt.show()
+    save_figdata(OUTPUT_FILE, data, meta)
+
+make_figure(data, OUTPUT_FILE)

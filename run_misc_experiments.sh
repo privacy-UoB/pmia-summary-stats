@@ -15,6 +15,9 @@ uv sync
 
 mkdir -p runs
 
+# Optional seed override (defaults to 42 in each Python script).
+SEED_ARG=${SEED:+--seed $SEED}
+
 declare -A EXP_CMD EXP_OUTPUT
 ALL_KEYS="4 12b"
 
@@ -35,7 +38,7 @@ for key in $KEYS; do
     log="runs/log_misc_${key}.txt"
 
     echo "[$key] Starting: $cmd -> $output (log: $log)"
-    uv run python $cmd "$output" > "$log" 2>&1 &
+    uv run python $cmd "$output" $SEED_ARG > "$log" 2>&1 &
     PIDS+=($!)
 done
 
