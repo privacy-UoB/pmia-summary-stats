@@ -1,4 +1,8 @@
+import sys
 import numpy as np
+import matplotlib
+if len(sys.argv) >= 3:
+    matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import random
 from scipy import stats
@@ -7,12 +11,15 @@ from tabulate import tabulate
 from utils_datasets import load_dataset, separate_diseased_miRNAs, independent, D2, _prepare_timestamp_data, _split_timestamp, drop_timestamp_index
 from utils import auc_scores, normalise, Gaussian_noise, L1
 
+# CLI: python Ordered_Timestamp.py [selected_distribution] [output.pdf]
+selected_distribution = int(sys.argv[1]) if len(sys.argv) >= 2 else 0
+OUTPUT_FILE = sys.argv[2] if len(sys.argv) >= 3 else None
+
 include_synthetic_noise = True
 include_pvalue_histogram = False
 include_tabulate = False
 stratifying = False
 fixed_FPR = True
-selected_distribution = 0
 # 0 = fixed Gaussian
 # 1 = shifted Gaussian
 # 2 = skewed normal - function call doesn't work
@@ -606,7 +613,11 @@ ax1.set_ylabel("AUC scores")
 ax1.set_ylim([0.2,1.1]) # enables comparable auc scores between L1 and LLR
 ax1.grid(True)
 
-plt.show()
+if OUTPUT_FILE:
+    plt.savefig(OUTPUT_FILE)
+    print(f"Saved to {OUTPUT_FILE}")
+else:
+    plt.show()
 
 if include_pvalue_histogram:
     for m in range(num_orders):

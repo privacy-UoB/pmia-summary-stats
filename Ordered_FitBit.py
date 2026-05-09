@@ -1,8 +1,15 @@
+import sys
 import numpy as np
+import matplotlib
+if len(sys.argv) >= 2:
+    matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, precision_score, confusion_matrix
 from utils_datasets import _prepare_FitBit_per_id, _split_FitBit
 from utils import auc_scores
+
+# CLI: python Ordered_FitBit.py [output.pdf]
+OUTPUT_FILE = sys.argv[1] if len(sys.argv) >= 2 else None
 
 # Hoist FitBit CSV parse + per-id grouping out of the outer loop;
 # only the pop/pool ShuffleSplit + per-timestamp aggregation re-runs per iteration.
@@ -176,7 +183,11 @@ ax1.set_ylabel("AUC scores")
 ax1.set_ylim([0.2,1.1]) # enables comparable auc scores between L1 and LLR
 ax1.grid(True)
 
-plt.show()
+if OUTPUT_FILE:
+    plt.savefig(OUTPUT_FILE)
+    print(f"Saved to {OUTPUT_FILE}")
+else:
+    plt.show()
 
 # # plots!
 # fig, ax = plt.subplots()

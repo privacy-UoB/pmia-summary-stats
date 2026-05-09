@@ -50,7 +50,7 @@ sigma_j_pool = np.std(pool, axis=0)
 ranges = [[0, 0.25, 0.5, 0.75, 1], # 0, fractions of standard deviation applied to the dataset
               [0, 100, 200, 300, 400], # 1, static values produce similar noise to one observed case
               np.concatenate(([0], np.logspace(1, 4, num=4)))] # 2
-multiplier = ranges[2]
+multiplier = ranges[0]
 
 miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", ...]
 num_orders = 2000 # number of different samples of MiRNAs
@@ -74,7 +74,8 @@ for count, m in enumerate(multiplier):
     nonneg_noised_pops = []
     nonneg_noised_pools = []
     for j in range(num_orders):
-        nonneg_noisy_pop, nonneg_noisy_pool = Gaussian_noise(pop, pool, 0, m, clip=True)
+        # paper: alpha * sigma_j per feature; m is the alpha scalar from ranges[0]
+        nonneg_noisy_pop, nonneg_noisy_pool = Gaussian_noise(pop, pool, 0, m * sigma_j, clip=True)
         nonneg_noised_pops.append(nonneg_noisy_pop)
         nonneg_noised_pools.append(nonneg_noisy_pool)
 
