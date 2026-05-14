@@ -130,8 +130,11 @@ def compute_theoretical_min_error(m, pool_size, signal_term):
 
 # ── Experiment ───────────────────────────────────────────────────────────────
 
-def run_experiment(iterations=2000):
+def run_experiment(iterations=2000, seed=42):
     """Run the 19-disease experiment and save results to CSV."""
+    # ShuffleSplit(random_state=None) consumes from numpy's global state, so
+    # seeding once here makes the per-disease random-pool draws reproducible.
+    np.random.seed(seed)
     print("Loading miRNA dataset ...")
     filter_pop = load_miRNA_data_once()
     n_total = filter_pop.shape[0]
