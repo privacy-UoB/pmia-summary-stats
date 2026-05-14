@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import random
 from scipy import stats
 from sklearn.preprocessing import normalize
+from plot_style import line_kwargs, stacked_auc_tpr
 from utils_datasets import load_dataset, separate_diseased_miRNAs, independent, D2, _prepare_timestamp_data, _split_timestamp, drop_timestamp_index
 from utils import auc_scores, normalise, Gaussian_noise, L1
 
@@ -33,40 +34,54 @@ def make_figure(data: dict, output_path: str | None) -> None:
             fpr_syntheticL1 = np.asarray(data["fpr_syntheticL1"])
             fpr_syntheticLLR = np.asarray(data["fpr_syntheticLLR"])
 
-    fig, ax1 = plt.subplots()
-    colours1 = ["cornflowerblue", "gold", "springgreen", "red"]
     if fixed_FPR:
-        ax2 = ax1.twinx()
-        colours2 = ["mediumblue", "orange", "green", "brown"]
-
-    if not include_synthetic_noise:
-        ax1.plot(range(len(auc_L1)), auc_L1, colours1[0], linewidth=2.0, label="AUC L1")
-        ax1.plot(range(len(auc_LLR)), auc_LLR, colours1[1], linewidth=2.0, label="AUC LLR")
-        if fixed_FPR:
-            ax2.plot(range(len(auc_L1)), tpr_at_fpr_L1, colours2[0], linewidth=2.0, label="fpr L1")
-            ax2.plot(range(len(auc_LLR)), tpr_at_fpr_LLR, colours2[1], linewidth=2.0, label="fpr LLR")
+        fig, ax_auc, ax_tpr = stacked_auc_tpr()
     else:
-        ax1.plot(range(len(auc_syntheticL1)), auc_L1[:6], colours1[0], linewidth=2.0, label="AUC L1 real")
-        ax1.plot(range(len(auc_syntheticLLR)), auc_LLR[:6], colours1[1], linewidth=2.0, label="AUC LLR real")
-        ax1.plot(range(len(auc_syntheticL1)), auc_syntheticL1, colours1[2], linewidth=2.0, label="AUC L1 synth")
-        ax1.plot(range(len(auc_syntheticLLR)), auc_syntheticLLR, colours1[3], linewidth=2.0, label="AUC LLR synth")
+        fig, ax_auc = plt.subplots()
+        ax_tpr = None
+
+    # real curves are solid; synthetic-noise overlay (if present) is dashed.
+    if not include_synthetic_noise:
+        ax_auc.plot(range(len(auc_L1)), auc_L1, label="AUC L1",
+                    **line_kwargs("L1", marker=None, linewidth=2.0))
+        ax_auc.plot(range(len(auc_LLR)), auc_LLR, label="AUC LLR",
+                    **line_kwargs("LLR", marker=None, linewidth=2.0))
         if fixed_FPR:
-            ax2.plot(range(len(fpr_syntheticL1)), tpr_at_fpr_L1[:6], colours2[0], linewidth=2.0, label="fpr L1 real")
-            ax2.plot(range(len(fpr_syntheticLLR)), tpr_at_fpr_LLR[:6], colours2[1], linewidth=2.0, label="fpr LLR real")
-            ax2.plot(range(len(fpr_syntheticL1)), fpr_syntheticL1, colours2[2], linewidth=2.0, label="fpr L1 synth")
-            ax2.plot(range(len(fpr_syntheticLLR)), fpr_syntheticLLR, colours2[3], linewidth=2.0, label="fpr LLR synth")
+            ax_tpr.plot(range(len(auc_L1)), tpr_at_fpr_L1, label="TPR L1",
+                        **line_kwargs("L1", marker=None, linewidth=2.0))
+            ax_tpr.plot(range(len(auc_LLR)), tpr_at_fpr_LLR, label="TPR LLR",
+                        **line_kwargs("LLR", marker=None, linewidth=2.0))
+    else:
+        ax_auc.plot(range(len(auc_syntheticL1)), auc_L1[:6], label="AUC L1 real",
+                    **line_kwargs("L1", marker=None, linewidth=2.0))
+        ax_auc.plot(range(len(auc_syntheticLLR)), auc_LLR[:6], label="AUC LLR real",
+                    **line_kwargs("LLR", marker=None, linewidth=2.0))
+        ax_auc.plot(range(len(auc_syntheticL1)), auc_syntheticL1, label="AUC L1 synth",
+                    **line_kwargs("L1", marker=None, linewidth=2.0, linestyle="--"))
+        ax_auc.plot(range(len(auc_syntheticLLR)), auc_syntheticLLR, label="AUC LLR synth",
+                    **line_kwargs("LLR", marker=None, linewidth=2.0, linestyle="--"))
+        if fixed_FPR:
+            ax_tpr.plot(range(len(fpr_syntheticL1)), tpr_at_fpr_L1[:6], label="TPR L1 real",
+                        **line_kwargs("L1", marker=None, linewidth=2.0))
+            ax_tpr.plot(range(len(fpr_syntheticLLR)), tpr_at_fpr_LLR[:6], label="TPR LLR real",
+                        **line_kwargs("LLR", marker=None, linewidth=2.0))
+            ax_tpr.plot(range(len(fpr_syntheticL1)), fpr_syntheticL1, label="TPR L1 synth",
+                        **line_kwargs("L1", marker=None, linewidth=2.0, linestyle="--"))
+            ax_tpr.plot(range(len(fpr_syntheticLLR)), fpr_syntheticLLR, label="TPR LLR synth",
+                        **line_kwargs("LLR", marker=None, linewidth=2.0, linestyle="--"))
 
-    ax1.legend(loc='upper right')
+    ax_auc.legend(loc='upper right')
+    ax_auc.set_ylabel("AUC")
+    ax_auc.set_ylim([0.5, 1])
+    ax_auc.grid(True)
     if fixed_FPR:
-        h1, l1 = ax1.get_legend_handles_labels()
-        h2, l2 = ax2.get_legend_handles_labels()
-        ax1.legend(h1 + h2, l1 + l2, loc='upper right')
-        ax2.set_ylabel("TPR at 0.01 FPR")
-
-    ax1.set_xlabel("timestamp")
-    ax1.set_ylabel("AUC scores")
-    ax1.set_ylim([0.2, 1.1])
-    ax1.grid(True)
+        ax_tpr.legend(loc='upper right')
+        ax_tpr.set_xlabel("timestamp")
+        ax_tpr.set_ylabel("TPR at 0.01 FPR")
+        ax_tpr.set_ylim([0, 1])
+        ax_tpr.grid(True)
+    else:
+        ax_auc.set_xlabel("timestamp")
 
     if output_path:
         plt.savefig(output_path)

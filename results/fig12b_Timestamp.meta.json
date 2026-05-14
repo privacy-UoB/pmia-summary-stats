@@ -1,0 +1,16 @@
+{
+  "script": "Ordered_Timestamp.py",
+  "argv": [
+    "Ordered_Timestamp.py",
+    "0",
+    "fig12b_Timestamp.pdf"
+  ],
+  "saved_at": "2026-05-09T09:26:54.720543+00:00",
+  "git_head": null,
+  "seed": 42,
+  "selected_distribution": 0,
+  "num_orders": 2000,
+  "include_synthetic_noise": true,
+  "fixed_FPR": true,
+  "stratifying": false
+}

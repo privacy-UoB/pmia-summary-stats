@@ -1,0 +1,21 @@
+{
+  "script": "Ordered_Noise.py",
+  "argv": [
+    "Ordered_Noise.py",
+    "D3",
+    "LLR",
+    "0",
+    "_",
+    "fig11a_D3_LLR_random.pdf"
+  ],
+  "saved_at": "2026-05-10T11:57:37.136492+00:00",
+  "git_head": null,
+  "seed": 42,
+  "disease": "D3",
+  "L1_or_LLR": "LLR",
+  "pool_idx": 0,
+  "random_sample_size": null,
+  "fixed_FPR": true,
+  "num_orders": 2000,
+  "stratifying": false
+}

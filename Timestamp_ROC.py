@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc, RocCurveDisplay
+from plot_style import line_kwargs
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 from utils import auc_scores
 
@@ -29,8 +30,10 @@ fpr_LLR, tpr_LLR, thresholds_LLR = roc_curve(y_true_LLR, y_score_LLR)
 
 # plotting the ROC performance of the inference
 fig, ax = plt.subplots()
-ax.plot(fpr_L1, tpr_L1, "-b", linewidth=2.0, label="L1 time 0-1")
-ax.plot(fpr_LLR, tpr_LLR, "-r", linewidth=2.0, label="LLR time 0-1")
+ax.plot(fpr_L1, tpr_L1, label="L1 time 0-1",
+        **line_kwargs("L1", marker=None, linewidth=2.0))
+ax.plot(fpr_LLR, tpr_LLR, label="LLR time 0-1",
+        **line_kwargs("LLR", marker=None, linewidth=2.0))
 ax.set_ylim([0,1]) # enables comparable auc scores between L1 and LLR
 
 plt.xlabel("fpr")

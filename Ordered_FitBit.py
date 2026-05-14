@@ -11,6 +11,7 @@ if len(sys.argv) >= 2 or _flags["replot"]:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, precision_score, confusion_matrix
+from plot_style import line_kwargs, stacked_auc_tpr, METRIC_COLOR
 from utils_datasets import _prepare_FitBit_per_id, _split_FitBit
 from utils import auc_scores
 
@@ -28,48 +29,61 @@ def make_figure(data: dict, output_path: str | None) -> None:
         tpr_L1_raw = np.asarray(data["tpr_at_fpr_L1"], dtype=float)
         tpr_LLR_raw = np.asarray(data["tpr_at_fpr_LLR"], dtype=float)
 
-    fig, ax1 = plt.subplots()
-    colours1 = ["cornflowerblue", "gold"]
     if fixed_FPR:
-        ax2 = ax1.twinx()
-        colours2 = ["mediumblue", "orange"]
+        fig, ax_auc, ax_tpr = stacked_auc_tpr()
+    else:
+        fig, ax_auc = plt.subplots()
+        ax_tpr = None
 
     if not error_bands:
         auc_L1 = np.average(auc_L1_raw, axis=0)
         auc_LLR = np.average(auc_LLR_raw, axis=0)
-        ax1.plot(range(iterations), auc_L1, colours1[0], linewidth=2.0, label="AUC L1")
-        ax1.plot(range(iterations), auc_LLR, colours1[1], linewidth=2.0, label="AUC LLR")
+        ax_auc.plot(range(iterations), auc_L1, label="AUC L1",
+                    **line_kwargs("L1", marker=None, linewidth=2.0))
+        ax_auc.plot(range(iterations), auc_LLR, label="AUC LLR",
+                    **line_kwargs("LLR", marker=None, linewidth=2.0))
         if fixed_FPR:
             tpr_at_fpr_L1 = np.average(tpr_L1_raw, axis=0)
             tpr_at_fpr_LLR = np.average(tpr_LLR_raw, axis=0)
-            ax2.plot(range(iterations), tpr_at_fpr_L1, colours2[0], linewidth=2.0, label="fpr L1")
-            ax2.plot(range(iterations), tpr_at_fpr_LLR, colours2[1], linewidth=2.0, label="fpr LLR")
+            ax_tpr.plot(range(iterations), tpr_at_fpr_L1, label="TPR L1",
+                        **line_kwargs("L1", marker=None, linewidth=2.0))
+            ax_tpr.plot(range(iterations), tpr_at_fpr_LLR, label="TPR LLR",
+                        **line_kwargs("LLR", marker=None, linewidth=2.0))
     else:
         auc_L1_eb = [np.average(auc_L1_raw, axis=0), np.min(auc_L1_raw, axis=0), np.max(auc_L1_raw, axis=0)]
         auc_LLR_eb = [np.average(auc_LLR_raw, axis=0), np.min(auc_LLR_raw, axis=0), np.max(auc_LLR_raw, axis=0)]
-        ax1.plot(range(iterations), auc_L1_eb[0], colours1[0], linewidth=2.0, label="L1")
-        ax1.fill_between(range(iterations), auc_L1_eb[1], auc_L1_eb[2], alpha=0.2)
-        ax1.plot(range(iterations), auc_LLR_eb[0], colours1[1], linewidth=2.0, label="LLR")
-        ax1.fill_between(range(iterations), auc_LLR_eb[1], auc_LLR_eb[2], alpha=0.2)
+        ax_auc.plot(range(iterations), auc_L1_eb[0], label="L1",
+                    **line_kwargs("L1", marker=None, linewidth=2.0))
+        ax_auc.fill_between(range(iterations), auc_L1_eb[1], auc_L1_eb[2],
+                            alpha=0.2, color=METRIC_COLOR["L1"])
+        ax_auc.plot(range(iterations), auc_LLR_eb[0], label="LLR",
+                    **line_kwargs("LLR", marker=None, linewidth=2.0))
+        ax_auc.fill_between(range(iterations), auc_LLR_eb[1], auc_LLR_eb[2],
+                            alpha=0.2, color=METRIC_COLOR["LLR"])
         if fixed_FPR:
             tpr_L1_eb = [np.average(tpr_L1_raw, axis=0), np.min(tpr_L1_raw, axis=0), np.max(tpr_L1_raw, axis=0)]
             tpr_LLR_eb = [np.average(tpr_LLR_raw, axis=0), np.min(tpr_LLR_raw, axis=0), np.max(tpr_LLR_raw, axis=0)]
-            ax2.plot(range(iterations), tpr_L1_eb[0], colours2[0], linewidth=2.0, label="L1")
-            ax2.fill_between(range(iterations), tpr_L1_eb[1], tpr_L1_eb[2], alpha=0.2)
-            ax2.plot(range(iterations), tpr_LLR_eb[0], colours2[1], linewidth=2.0, label="LLR")
-            ax2.fill_between(range(iterations), tpr_LLR_eb[1], tpr_LLR_eb[2], alpha=0.2)
+            ax_tpr.plot(range(iterations), tpr_L1_eb[0], label="L1",
+                        **line_kwargs("L1", marker=None, linewidth=2.0))
+            ax_tpr.fill_between(range(iterations), tpr_L1_eb[1], tpr_L1_eb[2],
+                                alpha=0.2, color=METRIC_COLOR["L1"])
+            ax_tpr.plot(range(iterations), tpr_LLR_eb[0], label="LLR",
+                        **line_kwargs("LLR", marker=None, linewidth=2.0))
+            ax_tpr.fill_between(range(iterations), tpr_LLR_eb[1], tpr_LLR_eb[2],
+                                alpha=0.2, color=METRIC_COLOR["LLR"])
 
-    ax1.legend(loc='upper right')
+    ax_auc.legend(loc='upper right')
+    ax_auc.set_ylabel("AUC")
+    ax_auc.set_ylim([0.5, 1])
+    ax_auc.grid(True)
     if fixed_FPR:
-        h1, l1 = ax1.get_legend_handles_labels()
-        h2, l2 = ax2.get_legend_handles_labels()
-        ax1.legend(h1 + h2, l1 + l2, loc='upper right')
-        ax2.set_ylabel("TPR at 0.01 FPR")
-
-    ax1.set_xlabel("timestamp")
-    ax1.set_ylabel("AUC scores")
-    ax1.set_ylim([0.2, 1.1])
-    ax1.grid(True)
+        ax_tpr.legend(loc='upper right')
+        ax_tpr.set_xlabel("timestamp")
+        ax_tpr.set_ylabel("TPR at 0.01 FPR")
+        ax_tpr.set_ylim([0, 1])
+        ax_tpr.grid(True)
+    else:
+        ax_auc.set_xlabel("timestamp")
 
     if output_path:
         plt.savefig(output_path)

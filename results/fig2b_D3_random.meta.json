@@ -1,0 +1,26 @@
+{
+  "script": "Noise.py",
+  "argv": [
+    "Noise.py",
+    "miRNA",
+    "true",
+    "D3",
+    "0",
+    "0",
+    "_",
+    "fig2b_D3_random.pdf"
+  ],
+  "saved_at": "2026-05-09T21:11:38.257722+00:00",
+  "git_head": null,
+  "seed": 42,
+  "dataset": "miRNA",
+  "disease": "D3",
+  "pop_idx": 0,
+  "pool_idx": 0,
+  "random_sample_size": null,
+  "include_deviations": true,
+  "fixed_FPR": true,
+  "include_longitudinals": false,
+  "num_orders": 2000,
+  "iterations": 1
+}

@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Experiment run logs and stray local CSV dumps
+runs/
+D17_L1_case.csv
+D17_L1_random.csv
+D17_LLR_case.csv
+D17_LLR_random.csv

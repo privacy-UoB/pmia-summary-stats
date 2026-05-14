@@ -11,6 +11,7 @@ if len(sys.argv) >= 4 or _flags["replot"]:
     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import random
+from plot_style import stacked_auc_tpr, noise_sequential
 from utils_datasets import load_dataset, separate_diseased_miRNAs, D3, D17
 from utils import auc_scores, Gaussian_noise
 
@@ -21,11 +22,15 @@ def make_figure(data: dict, output_path: str | None) -> None:
     fixed_FPR = bool(np.asarray(data["_fixed_FPR"]).item())
     L1_or_LLR = str(np.asarray(data["_L1_or_LLR"]).item())
 
-    fig, ax1 = plt.subplots()
-    colours1 = ["cornflowerblue", "gold", "springgreen", "red", "mediumpurple"]
     if fixed_FPR:
-        ax2 = ax1.twinx()
-        colours2 = ["mediumblue", "orange", "green", "brown", "purple"]
+        fig, ax_auc, ax_tpr = stacked_auc_tpr()
+    else:
+        fig, ax_auc = plt.subplots()
+        ax_tpr = None
+
+    # Light-to-dark ramp within the metric's hue family. Same palette used on
+    # both panels so a given noise level is the same shade in AUC and TPR.
+    palette = noise_sequential(L1_or_LLR, len(multiplier))
 
     if L1_or_LLR == "L1":
         noise_fraction_L1 = [list(row) for row in np.asarray(data["noise_fraction_L1"], dtype=object)]
@@ -37,27 +42,36 @@ def make_figure(data: dict, output_path: str | None) -> None:
             noise_fraction_tpr_at_fpr_LLR = [list(row) for row in np.asarray(data["noise_fraction_tpr_at_fpr_LLR"], dtype=object)]
 
     for index, noise in enumerate(multiplier):
+        c = palette[index]
         if L1_or_LLR == "L1":
-            ax1.plot(num_miRNAs, noise_fraction_L1[index], colours1[index], linewidth=2.0, label=f"AUC Std. dev. = {noise}")
+            ax_auc.plot(num_miRNAs, noise_fraction_L1[index],
+                        color=c, linewidth=2.0,
+                        label=f"std. dev. = {noise}")
             if fixed_FPR:
-                ax2.plot(num_miRNAs, noise_fraction_tpr_at_fpr_L1[index], colours2[index], linewidth=2.0, label=f"AUC Std. dev. = {noise}")
+                ax_tpr.plot(num_miRNAs, noise_fraction_tpr_at_fpr_L1[index],
+                            color=c, linewidth=2.0,
+                            label=f"std. dev. = {noise}")
         elif L1_or_LLR == "LLR":
-            ax1.plot(num_miRNAs, noise_fraction_LLR[index], colours1[index], linewidth=2.0, label=f"fpr Std. dev. = {noise}")
+            ax_auc.plot(num_miRNAs, noise_fraction_LLR[index],
+                        color=c, linewidth=2.0,
+                        label=f"std. dev. = {noise}")
             if fixed_FPR:
-                ax2.plot(num_miRNAs, noise_fraction_tpr_at_fpr_LLR[index], colours2[index], linewidth=2.0, label=f"fpr Std. dev. = {noise}")
+                ax_tpr.plot(num_miRNAs, noise_fraction_tpr_at_fpr_LLR[index],
+                            color=c, linewidth=2.0,
+                            label=f"std. dev. = {noise}")
 
-    ax1.legend(loc='upper right')
+    ax_auc.invert_xaxis()
+    ax_auc.legend(loc='upper right')
+    ax_auc.set_ylabel("AUC")
+    ax_auc.set_ylim([0.5, 1])
+    ax_auc.grid(True)
     if fixed_FPR:
-        h1, l1 = ax1.get_legend_handles_labels()
-        h2, l2 = ax2.get_legend_handles_labels()
-        ax1.legend(h1 + h2, l1 + l2, loc='upper right')
-        ax2.set_ylabel("TPR at 0.01 FPR")
-
-    ax1.invert_xaxis()
-    ax1.set_xlabel("number miRNAs")
-    ax1.set_ylabel("AUC scores")
-    ax1.set_ylim([0.3, 1])
-    ax1.grid(True)
+        ax_tpr.set_xlabel("number miRNAs")
+        ax_tpr.set_ylabel("TPR at 0.01 FPR")
+        ax_tpr.set_ylim([0, 1])
+        ax_tpr.grid(True)
+    else:
+        ax_auc.set_xlabel("number miRNAs")
 
     if output_path:
         plt.savefig(output_path)
