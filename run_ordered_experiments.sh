@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 4 D3 Ordered_Noise experiments: Fig 10 (case pool, n=20-25) and Fig 11 (random pool, n=65)
+# Ordered experiments on D3 (prostate cancer):
+#   Fig 3  (Ordered.py, no synthetic noise): 3a case pool, 3b random pool (n=65)
+#   Fig 10 (Ordered_Noise.py, case pool, n=65)
+#   Fig 11 (Ordered_Noise.py, random pool, n=65)
 # Usage:
-#   ./run_ordered_experiments.sh             # run all 4
-#   ./run_ordered_experiments.sh 10a 11b     # run only experiments 10a, 11b
+#   ./run_ordered_experiments.sh                  # run all
+#   ./run_ordered_experiments.sh 3a 10a 11b       # run a subset
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -17,17 +20,22 @@ mkdir -p runs
 # Optional seed override (defaults to 42 in each Python script).
 SEED_ARG=${SEED:+--seed $SEED}
 
-# Define experiments: disease metric pool_idx random_sample_size output_file
-declare -A EXP_DISEASE EXP_METRIC EXP_POOL EXP_SAMPLE EXP_OUTPUT
-# 10a/10b: D3 case pool L1+LLR; 11a/11b: D3 random pool L1+LLR (sample=_ -> n=65 default)
-ALL_KEYS="10a 10b 11a 11b"
+# Define experiments. Two flavours:
+#   Fig 3 (Ordered.py):       disease pool_idx sample_size  -> one panel per pool, both metrics
+#   Fig 10/11 (Ordered_Noise): disease metric pool_idx sample_size  -> noise sweep per metric
+declare -A EXP_SCRIPT EXP_DISEASE EXP_METRIC EXP_POOL EXP_SAMPLE EXP_OUTPUT
+ALL_KEYS="3a 3b 10a 10b 11a 11b"
 
-EXP_DISEASE=([10a]=D3   [10b]=D3   [11a]=D3   [11b]=D3)
-EXP_METRIC=( [10a]=LLR  [10b]=L1   [11a]=LLR  [11b]=L1)
-EXP_POOL=(   [10a]=1    [10b]=1    [11a]=0    [11b]=0)
-EXP_SAMPLE=( [10a]=_    [10b]=_    [11a]=_    [11b]=_)
-EXP_OUTPUT=( [10a]=fig10a_D3_LLR_case.pdf   [10b]=fig10b_D3_L1_case.pdf \
-             [11a]=fig11a_D3_LLR_random.pdf [11b]=fig11b_D3_L1_random.pdf)
+EXP_SCRIPT=( [3a]=Ordered.py        [3b]=Ordered.py \
+             [10a]=Ordered_Noise.py [10b]=Ordered_Noise.py \
+             [11a]=Ordered_Noise.py [11b]=Ordered_Noise.py)
+EXP_DISEASE=([3a]=D3    [3b]=D3    [10a]=D3   [10b]=D3   [11a]=D3   [11b]=D3)
+EXP_METRIC=( [3a]=_     [3b]=_     [10a]=LLR  [10b]=L1   [11a]=LLR  [11b]=L1)
+EXP_POOL=(   [3a]=1     [3b]=0     [10a]=1    [10b]=1    [11a]=0    [11b]=0)
+EXP_SAMPLE=( [3a]=_     [3b]=_     [10a]=_    [10b]=_    [11a]=_    [11b]=_)
+EXP_OUTPUT=( [3a]=fig3a_D3_case.pdf          [3b]=fig3b_D3_random.pdf \
+             [10a]=fig10a_D3_LLR_case.pdf    [10b]=fig10b_D3_L1_case.pdf \
+             [11a]=fig11a_D3_LLR_random.pdf  [11b]=fig11b_D3_L1_random.pdf)
 
 # Use CLI args as subset, or run all
 if [ $# -gt 0 ]; then
@@ -38,6 +46,7 @@ fi
 
 PIDS=()
 for key in $KEYS; do
+    script=${EXP_SCRIPT[$key]}
     disease=${EXP_DISEASE[$key]}
     metric=${EXP_METRIC[$key]}
     pool=${EXP_POOL[$key]}
@@ -45,8 +54,13 @@ for key in $KEYS; do
     output=${EXP_OUTPUT[$key]}
     log="runs/log_ordered_${key}_${disease}_${metric}_${pool}.txt"
 
-    echo "[$key] Starting: $disease $metric pool=$pool sample=$sample -> $output (log: $log)"
-    uv run python Ordered_Noise.py "$disease" "$metric" "$pool" "$sample" "$output" $SEED_ARG > "$log" 2>&1 &
+    if [ "$script" = "Ordered.py" ]; then
+        echo "[$key] Starting: $script $disease pool=$pool sample=$sample -> $output (log: $log)"
+        uv run python "$script" "$disease" "$pool" "$sample" "$output" $SEED_ARG > "$log" 2>&1 &
+    else
+        echo "[$key] Starting: $script $disease $metric pool=$pool sample=$sample -> $output (log: $log)"
+        uv run python "$script" "$disease" "$metric" "$pool" "$sample" "$output" $SEED_ARG > "$log" 2>&1 &
+    fi
     PIDS+=($!)
 done
 

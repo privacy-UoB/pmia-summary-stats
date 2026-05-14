@@ -1,166 +1,206 @@
-import numpy as np
-import matplotlib.pyplot as plt
+import os
+import sys
 import random
-from utils_datasets import load_dataset, separate_diseased_miRNAs, D17
-from utils import auc_scores, fpr_power, LLR, L1, L1_threshold
 
-# paper: the demonstrated graphs showing roc curves
-    # 1st: 50 subsets of n/1049 different individuals (n = 35, 65, 124)
-    # 2nd: 6 case groups D19, D17, D10, D7, D3, D1
+import numpy as np
+import matplotlib
 
-stratifying = True
-fixed_FPR = True
-D = D17
+from experiment_io import parse_flags, seed_all, save_figdata, load_figdata
 
-if stratifying == False:
-    # load dataset
-    population, pool = load_dataset(miRNA=True, disease_case_sample=D, random_sample_size=20)
+_flags = parse_flags(sys.argv)
+seed_all(_flags["seed"])
 
-    # 0 = random, 1 = case
-    pop = population[0] # make pop configurable
-    pool = pool[0] # make pool configurable
+if len(sys.argv) >= 3 or _flags["replot"]:
+    matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+from plot_style import line_kwargs, stacked_auc_tpr  # noqa: E402
+from utils_datasets import load_dataset, D3, D17  # noqa: E402
+from fast_paths import ordered_curves_l1, ordered_curves_llr  # noqa: E402
 
+
+# Random-pool sampling variance at n=65 is large (~0.07 in AUC); average AUC/TPR
+# curves over K independent pool draws. Case pool (POOL_IDX=1) is
+# disease-deterministic, so K=1 there. Matches Ordered_Noise.py.
+NUM_POOLS_DEFAULT = 20
+
+POOL_NAME = {0: "random", 1: "case"}
+
+
+def make_figure(data: dict, output_path: str | None) -> None:
+    num_miRNAs = list(np.asarray(data["num_miRNAs"]))
+    fixed_FPR = bool(np.asarray(data["_fixed_FPR"]).item())
+    pool_idx = int(np.asarray(data["_pool_idx"]).item())
+    pool_name = POOL_NAME[pool_idx]
+
+    auc_L1 = np.asarray(data["auc_L1"], dtype=float)
+    auc_LLR = np.asarray(data["auc_LLR"], dtype=float)
+    if fixed_FPR:
+        tpr_at_fpr_L1 = np.asarray(data["tpr_at_fpr_L1"], dtype=float)
+        tpr_at_fpr_LLR = np.asarray(data["tpr_at_fpr_LLR"], dtype=float)
+
+    if fixed_FPR:
+        fig, ax_auc, ax_tpr = stacked_auc_tpr()
+    else:
+        fig, ax_auc = plt.subplots()
+        ax_tpr = None
+
+    ax_auc.plot(num_miRNAs, auc_L1, label="L1",
+                **line_kwargs("L1", pool_name, marker=None, linewidth=2.0))
+    ax_auc.plot(num_miRNAs, auc_LLR, label="LLR",
+                **line_kwargs("LLR", pool_name, marker=None, linewidth=2.0))
+    if fixed_FPR:
+        ax_tpr.plot(num_miRNAs, tpr_at_fpr_L1, label="L1",
+                    **line_kwargs("L1", pool_name, marker=None, linewidth=2.0))
+        ax_tpr.plot(num_miRNAs, tpr_at_fpr_LLR, label="LLR",
+                    **line_kwargs("LLR", pool_name, marker=None, linewidth=2.0))
+
+    ax_auc.invert_xaxis()
+    ax_auc.legend(loc='upper right')
+    ax_auc.set_ylabel("AUC")
+    ax_auc.set_ylim([0.5, 1])
+    ax_auc.grid(True)
+    if fixed_FPR:
+        ax_tpr.legend(loc='upper right')
+        ax_tpr.set_xlabel("number miRNAs")
+        ax_tpr.set_ylabel("TPR at 0.01 FPR")
+        ax_tpr.set_ylim([0, 1])
+        ax_tpr.grid(True)
+    else:
+        ax_auc.set_xlabel("number miRNAs")
+
+    if output_path:
+        plt.savefig(output_path)
+        print(f"Saved to {output_path}")
+    else:
+        plt.show()
+
+
+# CLI: python Ordered.py <disease> <pool_idx> [random_sample_size] [output.pdf]
+# Falls back to interactive defaults when no args given.
+# In --replot mode, only the optional [output.pdf] positional is consulted.
+DISEASES = {"D3": D3, "D17": D17}
+if _flags["replot"]:
+    OUTPUT_FILE = sys.argv[1] if len(sys.argv) >= 2 else None
+    data, _meta = load_figdata(_flags["replot"])
+    make_figure(data, OUTPUT_FILE)
+    sys.exit(0)
+
+if len(sys.argv) >= 3:
+    DISEASE = DISEASES[sys.argv[1]]
+    POOL_IDX = int(sys.argv[2])
+    RANDOM_SAMPLE_SIZE = int(sys.argv[3]) if len(sys.argv) >= 4 and sys.argv[3] != "_" else None
+    OUTPUT_FILE = sys.argv[4] if len(sys.argv) >= 5 else None
 else:
-    # diseased case sample pop/pool only
-    only_diseased_miRNAs_pop, without_diseased_miRNAs_pop, only_diseased_miRNAs_pool, without_diseased_miRNAs_pool = separate_diseased_miRNAs(D, "miRNA")
-    selectpop = [only_diseased_miRNAs_pop, without_diseased_miRNAs_pop]
-    selectpool = [only_diseased_miRNAs_pool, without_diseased_miRNAs_pool]
-
-# when not stratifying, comment out/unindent from here
-both_L1 = []
-both_LLR = []
-if fixed_FPR == True:
-    both_tpr_L1 = []
-    both_tpr_LLR = []
-for k in range(len(selectpop)):
-    pop = selectpop[k]
-    pool = selectpool[k]
-    # to here
-
-    auc_L1 = []
-    auc_LLR = []
-    if fixed_FPR == True:
-        tpr_at_fpr_L1 = []
-        tpr_at_fpr_LLR = []
-    num_miRNAs = []
-    miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", ...]
-    num_orders = 5000 # number of different samples of MiRNAs
-
-    shuffled_lists = []
-    for j in range (num_orders):
-        current_miRNA_list = list(miRNAs)
-        if stratifying == False:
-            random.shuffle(current_miRNA_list) 
-        else:
-           current_miRNA_list = random.sample(current_miRNA_list, len(only_diseased_miRNAs_pool.columns))
-        shuffled_lists.append(current_miRNA_list)
-
-    for i in range(2, len(current_miRNA_list)+1, 1): # MiRNAs range from 1 to 466 in paper
-        aucs_L1 = []
-        aucs_LLR = []
-        if fixed_FPR == True:
-            tpr_at_fprs_L1 = []
-            tpr_at_fprs_LLR = []
-        num_miRNAs.append(i)
-
-        for j in range (num_orders):
-            current_shuffled_list = shuffled_lists[j]
-            selected_miRNAs = current_shuffled_list[:i]
-
-            local_pop = pop[selected_miRNAs]
-            local_pool = pool[selected_miRNAs]
-            
-            # print(L1(victim, local_pop, local_pool).sum())
-            # print(L1_threshold(local_pop, local_pool))
-
-            # print(LLR(local_pop, local_pop, local_pool))
-            # print(L1(local_pop, local_pop, local_pool))
-
-            # Query: should these actually be local_pop, local_pool, pop, pool?
-            roc_L1, pvalue_pop_L1, pvalue_pool_L1 = auc_scores(local_pop, local_pool, local_pop, local_pool)
-            roc_LLR, pvalue_pop_LLR, pvalue_pool_LLR = auc_scores(local_pop, local_pool, local_pop, local_pool, LR=True)
-
-            aucs_L1.append(roc_L1)        
-            aucs_LLR.append(roc_LLR)
-
-            if fixed_FPR == True:
-                fpr_L1, tpr_L1, thresholds_L1 = auc_scores(local_pop, local_pool, local_pop, local_pool, FPR=True)
-                fpr_LLR, tpr_LLR, thresholds_LLR = auc_scores(local_pop, local_pool, local_pop, local_pool, LR=True, FPR=True)
-
-                # TPR at a fixed FPR (e.g., 0.01 = 1%)
-                target_fpr = 1e-2
-                tpr_at_fprs_L1.append(np.interp(target_fpr, fpr_L1, tpr_L1))
-                tpr_at_fprs_LLR.append(np.interp(target_fpr, fpr_LLR, tpr_LLR))
-
-            # fpr_L1, power_L1 = fpr_power(local_pop, local_pool, pvalue_pop_L1, pvalue_pool_L1)
-            # fpr_LLR, power_LLR = fpr_power(local_pop, local_pool, pvalue_pop_LLR, pvalue_pool_LLR, LR=True)
-
-        if len(aucs_L1) >0:
-            auc_L1.append(np.average(aucs_L1))
-
-        if len(aucs_LLR) >0:
-            auc_LLR.append(np.average(aucs_LLR))
-
-        if fixed_FPR == True:
-            if len(tpr_at_fprs_L1) >0:
-                tpr_at_fpr_L1.append(np.average(tpr_at_fprs_L1))
-
-            if len(tpr_at_fprs_LLR) >0:
-                tpr_at_fpr_LLR.append(np.average(tpr_at_fprs_LLR))
+    DISEASE = D3
+    POOL_IDX = 0
+    RANDOM_SAMPLE_SIZE = None
+    OUTPUT_FILE = None
 
 
-    both_L1.append(auc_L1)
-    both_LLR.append(auc_LLR)
-    if fixed_FPR == True:
-        both_tpr_L1.append(tpr_at_fpr_L1)
-        both_tpr_LLR.append(tpr_at_fpr_LLR)
+fixed_FPR = True
+# Env overrides for cheap smoke tests and runtime tuning.
+num_orders = int(os.environ.get("NUM_ORDERS", 5000))
+_num_pools_default = int(os.environ.get("NUM_POOLS", NUM_POOLS_DEFAULT))
+NUM_POOLS = _num_pools_default if POOL_IDX == 0 else 1   # case pool is deterministic
+base_seed = _flags["seed"]
 
-# plots!
-# fig, ax = plt.subplots()
-# ax.set_xscale("log")
-# ax.plot(fpr_L1, power_L1, linewidth=2.0)
-# ax.plot(fpr_L1, power_LLR, linewidth=2.0)
-# plt.xlabel("fpr")
-# plt.ylabel("power")
-# plt.show()
 
-# print(f'AUC score:{auc_L1}')
-# print(f'AUC score:{auc_LLR}')
+def _compute_one_pool(pool_seed: int):
+    """Reseed, draw a fresh random pool (or use the deterministic case pool),
+    and return (auc_L1, auc_LLR, tpr_L1, tpr_LLR) curves of shape (n_miRNA_counts,)
+    plus the miRNA-count x-axis. L1 and LLR share identical feature orderings
+    (re-seed between calls so the cumulative-prefix permutations match)."""
+    np.random.seed(pool_seed)
+    random.seed(pool_seed)
 
-# plots!
-fig, ax1 = plt.subplots()
-colours1 = ["cornflowerblue", "gold", "springgreen", "red"]
+    populations, pools = load_dataset(
+        miRNA=True, disease_case_sample=DISEASE,
+        random_sample_size=RANDOM_SAMPLE_SIZE)
+    pop_df = populations[POOL_IDX]
+    pool_df = pools[POOL_IDX]
 
-# Left-hand x axis for AUC scores
-ax1.plot(num_miRNAs, both_L1[0], colours1[0], linewidth=2.0, label="L1 AUC diseased miRNAs")
-ax1.plot(num_miRNAs, both_LLR[0], colours1[1], linewidth=2.0, label="LLR AUC diseased miRNAs")
-ax1.plot(num_miRNAs, both_L1[1], colours1[2], linewidth=2.0, label="L1 AUC normal miRNAs")
-ax1.plot(num_miRNAs, both_LLR[1], colours1[3], linewidth=2.0, label="LLR AUC normal miRNAs")
+    sigma_j = np.std(pop_df, axis=0).to_numpy()
+    n_feat = pop_df.shape[1]
+    miRNA_counts = list(range(2, n_feat + 1))   # 2, 3, ..., n_feat
 
-# Right hand x axis for TPR at fixed FPR
-if fixed_FPR == True:
-    ax2 = ax1.twinx()
-    colours2 = ["mediumblue", "orange", "green", "brown"]
+    multipliers = [0]   # no synthetic noise (Figure 3)
+    pop_arr = pop_df.to_numpy(dtype=np.float64)
+    pool_arr = pool_df.to_numpy(dtype=np.float64)
 
-    ax2.plot(num_miRNAs, both_tpr_L1[0], colours2[0], linewidth=2.0, label="L1 tpr diseased miRNAs")
-    ax2.plot(num_miRNAs, both_tpr_LLR[0], colours2[1], linewidth=2.0, label="LLR tpr diseased miRNAs")
-    ax2.plot(num_miRNAs, both_tpr_L1[1], colours2[2], linewidth=2.0, label="L1 tpr normal miRNAs")
-    ax2.plot(num_miRNAs, both_tpr_LLR[1], colours2[3], linewidth=2.0, label="LLR tpr normal miRNAs")
+    # Re-seed before each metric so both consume the same permutation sequence.
+    np.random.seed(pool_seed)
+    random.seed(pool_seed)
+    auc_l1_mat, tpr_l1_mat = ordered_curves_l1(
+        pop_arr, pool_arr, multipliers, miRNA_counts, num_orders,
+        sigma_j, np.random, random, target_fpr=1e-2)
 
-ax1.legend(loc='upper right')
-if fixed_FPR == True:
-    # Merge handles and labels
-    h1, l1 = ax1.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
+    np.random.seed(pool_seed)
+    random.seed(pool_seed)
+    auc_llr_mat, tpr_llr_mat = ordered_curves_llr(
+        pop_arr, pool_arr, multipliers, miRNA_counts, num_orders,
+        sigma_j, np.random, random, target_fpr=1e-2)
 
-    # Add combined legend to one axis
-    ax1.legend(h1 + h2, l1 + l2, loc='upper right')
-    ax2.set_ylabel("TPR at 0.01 FPR")
+    return (auc_l1_mat[0], auc_llr_mat[0],
+            tpr_l1_mat[0], tpr_llr_mat[0], miRNA_counts)
 
-ax1.invert_xaxis()
-ax1.set_xlabel("number miRNAs")
-ax1.set_ylabel("AUC scores")
-ax1.set_ylim([0.5,1]) # enables comparable auc scores between L1 and LLR
-ax1.grid(True)
 
-plt.show() 
+pool_auc_l1 = []
+pool_auc_llr = []
+pool_tpr_l1 = []
+pool_tpr_llr = []
+pool_seeds = []
+num_miRNAs = None
+
+average_over_pools = (POOL_IDX == 0)   # case pool is disease-deterministic
+for k in range(NUM_POOLS):
+    pool_seed = (base_seed * 1000 + k) if average_over_pools else base_seed
+    pool_seeds.append(pool_seed)
+    print(f"\n=== pool {k + 1}/{NUM_POOLS}  (seed={pool_seed}) ===", flush=True)
+    auc_l1, auc_llr, tpr_l1, tpr_llr, miRNA_counts = _compute_one_pool(pool_seed)
+    pool_auc_l1.append(auc_l1)
+    pool_auc_llr.append(auc_llr)
+    pool_tpr_l1.append(tpr_l1)
+    pool_tpr_llr.append(tpr_llr)
+    if num_miRNAs is None:
+        num_miRNAs = miRNA_counts
+
+per_pool_auc_l1 = np.stack(pool_auc_l1, axis=0)   # (K, n_cnts)
+per_pool_auc_llr = np.stack(pool_auc_llr, axis=0)
+per_pool_tpr_l1 = np.stack(pool_tpr_l1, axis=0)
+per_pool_tpr_llr = np.stack(pool_tpr_llr, axis=0)
+mean_auc_l1 = per_pool_auc_l1.mean(axis=0)
+mean_auc_llr = per_pool_auc_llr.mean(axis=0)
+mean_tpr_l1 = per_pool_tpr_l1.mean(axis=0)
+mean_tpr_llr = per_pool_tpr_llr.mean(axis=0)
+
+
+data = {
+    "num_miRNAs": np.asarray(num_miRNAs),
+    "_fixed_FPR": fixed_FPR,
+    "_pool_idx": POOL_IDX,
+    "auc_L1": mean_auc_l1,
+    "auc_LLR": mean_auc_llr,
+    "auc_L1_per_pool": per_pool_auc_l1,
+    "auc_LLR_per_pool": per_pool_auc_llr,
+}
+if fixed_FPR:
+    data["tpr_at_fpr_L1"] = mean_tpr_l1
+    data["tpr_at_fpr_LLR"] = mean_tpr_llr
+    data["tpr_at_fpr_L1_per_pool"] = per_pool_tpr_l1
+    data["tpr_at_fpr_LLR_per_pool"] = per_pool_tpr_llr
+
+meta = {
+    "seed": base_seed,
+    "disease": sys.argv[1] if len(sys.argv) >= 2 else None,
+    "pool_idx": POOL_IDX,
+    "random_sample_size": RANDOM_SAMPLE_SIZE,
+    "fixed_FPR": fixed_FPR,
+    "num_orders": num_orders,
+    "num_pools": NUM_POOLS,
+    "pool_seeds": pool_seeds,
+}
+
+if OUTPUT_FILE:
+    save_figdata(OUTPUT_FILE, data, meta)
+
+make_figure(data, OUTPUT_FILE)
