@@ -1,4 +1,7 @@
+import os
 import sys
+import random
+
 import numpy as np
 import matplotlib
 
@@ -9,11 +12,16 @@ seed_all(_flags["seed"])
 
 if len(sys.argv) >= 4 or _flags["replot"]:
     matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import random
-from plot_style import stacked_auc_tpr, noise_sequential
-from utils_datasets import load_dataset, separate_diseased_miRNAs, D3, D17
-from utils import auc_scores, Gaussian_noise
+import matplotlib.pyplot as plt  # noqa: E402
+from plot_style import stacked_auc_tpr, noise_sequential  # noqa: E402
+from utils_datasets import load_dataset, separate_diseased_miRNAs, D3, D17  # noqa: E402
+from fast_paths import ordered_curves_llr, ordered_curves_l1  # noqa: E402
+
+
+# Random-pool sampling variance at n=65 is large (~0.07 in AUC), so we average
+# AUC curves over K independent pool draws. Case pool (POOL_IDX=1) is
+# disease-deterministic, so K=1 there.
+NUM_POOLS_DEFAULT = 20
 
 
 def make_figure(data: dict, output_path: str | None) -> None:
@@ -101,132 +109,78 @@ if _flags["replot"]:
     make_figure(data, OUTPUT_FILE)
     sys.exit(0)
 
-# paper: the demonstrated graphs showing roc curves
-    # 1st: 50 subsets of n/1049 different individuals (n = 35, 65, 124)
-    # 2nd: 6 case groups D19, D17, D10, D7, D3, D1
 
-stratifying = False # Not enough pool miRNAs in True case
+stratifying = False  # Not enough pool miRNAs in True case
 fixed_FPR = True
+# Env overrides for cheap smoke tests and runtime tuning.
+num_orders = int(os.environ.get("NUM_ORDERS", 2000))
+_num_pools_default = int(os.environ.get("NUM_POOLS", NUM_POOLS_DEFAULT))
+NUM_POOLS = _num_pools_default if POOL_IDX == 0 else 1   # case pool is deterministic
+base_seed = _flags["seed"]
 
-if stratifying == False:
-    # load dataset
-    population, pool = load_dataset(miRNA=True, disease_case_sample=DISEASE, random_sample_size=RANDOM_SAMPLE_SIZE)
 
-    # 0 = random, 1 = case
-    pop = population[POOL_IDX]
-    pool = pool[POOL_IDX]
+def _compute_one_pool(pool_seed: int):
+    """Reseed, draw a fresh random pool of n=65 (or use the deterministic case
+    pool), and return (auc, tpr) curves of shape (n_multipliers, n_miRNA_counts)
+    plus the miRNA-count x-axis."""
+    np.random.seed(pool_seed)
+    random.seed(pool_seed)
 
-else:
-    # diseased case sample pop/pool only
-    only_diseased_miRNAs_pop, without_diseased_miRNAs_pop, only_diseased_miRNAs_pool, without_diseased_miRNAs_pool = separate_diseased_miRNAs(DISEASE, "miRNA")
-    pop = without_diseased_miRNAs_pop
-    pool = without_diseased_miRNAs_pool
+    if stratifying:
+        only_pop, wo_pop, only_pool, wo_pool = separate_diseased_miRNAs(DISEASE, "miRNA")
+        pop_df = wo_pop
+        pool_df = wo_pool
+    else:
+        populations, pools = load_dataset(
+            miRNA=True, disease_case_sample=DISEASE,
+            random_sample_size=RANDOM_SAMPLE_SIZE)
+        pop_df = populations[POOL_IDX]
+        pool_df = pools[POOL_IDX]
 
-sigma_j = np.std(pop, axis=0) # this is doing it over all the columns (miRNAs)
-sigma_j_pool = np.std(pool, axis=0)
-ranges = [[0, 0.25, 0.5, 0.75, 1], # 0, fractions of standard deviation applied to the dataset
-              [0, 100, 200, 300, 400], # 1, static values produce similar noise to one observed case
-              np.concatenate(([0], np.logspace(1, 4, num=4)))] # 2
-multiplier = ranges[0]
+    sigma_j = np.std(pop_df, axis=0).to_numpy()
+    n_feat = pop_df.shape[1]
+    miRNA_counts = list(range(2, n_feat, 2))   # 2, 4, ..., n_feat-1 (or n_feat-2 for even)
 
-miRNAs = list(pop.keys()) # get the list of miRNAs ["miRNA_1234", "miRNA_1235", ...]
-num_orders = 2000 # number of different samples of MiRNAs
+    multipliers = [0, 0.25, 0.5, 0.75, 1]
+    pop_arr = pop_df.to_numpy(dtype=np.float64)
+    pool_arr = pool_df.to_numpy(dtype=np.float64)
 
-# Pre-generate shuffled orderings (minimal memory)
-shuffled_lists = []
-for j in range(num_orders):
-    current_miRNA_list = list(miRNAs)
-    random.shuffle(current_miRNA_list)
-    shuffled_lists.append(current_miRNA_list)
+    if L1_or_LLR == "LLR":
+        auc, tpr = ordered_curves_llr(
+            pop_arr, pool_arr, multipliers, miRNA_counts, num_orders,
+            sigma_j, np.random, random, target_fpr=1e-2)
+    elif L1_or_LLR == "L1":
+        auc, tpr = ordered_curves_l1(
+            pop_arr, pool_arr, multipliers, miRNA_counts, num_orders,
+            sigma_j, np.random, random, target_fpr=1e-2)
+    else:
+        raise ValueError(f"Unknown metric: {L1_or_LLR}")
+    return auc, tpr, multipliers, miRNA_counts
 
-noise_fraction_L1 = []
-noise_fraction_LLR = []
-if fixed_FPR == True:
-    noise_fraction_tpr_at_fpr_L1 = []
-    noise_fraction_tpr_at_fpr_LLR = []
 
-# Process one multiplier at a time to reduce memory (~8 GB instead of ~37 GB)
-for count, m in enumerate(multiplier):
-    # Generate noise for all orders at this multiplier only
-    nonneg_noised_pops = []
-    nonneg_noised_pools = []
-    for j in range(num_orders):
-        # paper: alpha * sigma_j per feature; m is the alpha scalar from ranges[0]
-        nonneg_noisy_pop, nonneg_noisy_pool = Gaussian_noise(pop, pool, 0, m * sigma_j, clip=True)
-        nonneg_noised_pops.append(nonneg_noisy_pop)
-        nonneg_noised_pools.append(nonneg_noisy_pool)
+pool_aucs = []
+pool_tprs = []
+pool_seeds = []
+multiplier = None
+num_miRNAs = None
 
-    auc_L1 = []
-    auc_LLR = []
-    if fixed_FPR == True:
-        tpr_at_fpr_L1 = []
-        tpr_at_fpr_LLR = []
-    num_miRNAs = []
+average_over_pools = (POOL_IDX == 0)  # case pool is disease-deterministic
+for k in range(NUM_POOLS):
+    pool_seed = (base_seed * 1000 + k) if average_over_pools else base_seed
+    pool_seeds.append(pool_seed)
+    print(f"\n=== pool {k + 1}/{NUM_POOLS}  (seed={pool_seed}) ===", flush=True)
+    auc, tpr, multipliers, miRNA_counts = _compute_one_pool(pool_seed)
+    pool_aucs.append(auc)
+    pool_tprs.append(tpr)
+    if multiplier is None:
+        multiplier = multipliers
+        num_miRNAs = miRNA_counts
 
-    for i in range(2, len(miRNAs), 2): # MiRNAs range from 1 to 466 in paper
-        aucs_L1 = []
-        aucs_LLR = []
-        if fixed_FPR == True:
-            tpr_at_fprs_L1 = []
-            tpr_at_fprs_LLR = []
-        num_miRNAs.append(i)
+per_pool_auc = np.stack(pool_aucs, axis=0)         # (K, n_mults, n_cnts)
+per_pool_tpr = np.stack(pool_tprs, axis=0)
+mean_auc = per_pool_auc.mean(axis=0)
+mean_tpr = per_pool_tpr.mean(axis=0)
 
-        print("miRNA", i, "on iteration", count)
-
-        for j in range (num_orders):
-            current_shuffled_list = shuffled_lists[j]
-            selected_miRNAs = current_shuffled_list[:i]
-
-            local_noised_pop = nonneg_noised_pops[j][selected_miRNAs]
-            local_noised_pool = nonneg_noised_pools[j][selected_miRNAs]
-
-            local_pop = pop[selected_miRNAs]
-            local_pool = pool[selected_miRNAs]
-
-            # local_pop & local_pool instead of pop & pool due to attacker's lacking access to full information
-            if L1_or_LLR == "L1":
-                roc_L1 = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, p_values=False)
-                aucs_L1.append(roc_L1)
-
-                if fixed_FPR == True:
-                    fpr_L1, tpr_L1, thresholds_L1 = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, FPR=True)
-
-                    # TPR at a fixed FPR (e.g., 0.01 = 1%)
-                    target_fpr = 1e-2
-                    tpr_at_fprs_L1.append(np.interp(target_fpr, fpr_L1, tpr_L1))
-            elif L1_or_LLR == "LLR":
-                roc_LLR = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, LR=True, p_values=False)
-                aucs_LLR.append(roc_LLR)
-
-                if fixed_FPR == True:
-                    fpr_LLR, tpr_LLR, thresholds_LLR = auc_scores(local_noised_pop, local_noised_pool, local_pop, local_pool, LR=True, FPR=True)
-
-                    # TPR at a fixed FPR (e.g., 0.01 = 1%)
-                    target_fpr = 1e-2
-                    tpr_at_fprs_LLR.append(np.interp(target_fpr, fpr_LLR, tpr_LLR))
-
-        if L1_or_LLR == "L1":
-            if len(aucs_L1) >0:
-                auc_L1.append(np.average(aucs_L1))
-
-            if fixed_FPR == True:
-                if len(tpr_at_fprs_L1) >0:
-                    tpr_at_fpr_L1.append(np.average(tpr_at_fprs_L1))
-
-        elif L1_or_LLR == "LLR":
-            if len(aucs_LLR) >0:
-                auc_LLR.append(np.average(aucs_LLR))
-
-            if fixed_FPR == True:
-                if len(tpr_at_fprs_LLR) >0:
-                    tpr_at_fpr_LLR.append(np.average(tpr_at_fprs_LLR))
-
-    noise_fraction_L1.append(auc_L1) if L1_or_LLR == "L1" else noise_fraction_LLR.append(auc_LLR)
-    if fixed_FPR == True:
-        noise_fraction_tpr_at_fpr_L1.append(tpr_at_fpr_L1) if L1_or_LLR == "L1" else noise_fraction_tpr_at_fpr_LLR.append(tpr_at_fpr_LLR)
-
-    # Free memory before next multiplier
-    del nonneg_noised_pops, nonneg_noised_pools
 
 # Build the figure-data dict and save before plotting.
 data = {
@@ -236,22 +190,28 @@ data = {
     "_L1_or_LLR": L1_or_LLR,
 }
 if L1_or_LLR == "L1":
-    data["noise_fraction_L1"] = np.asarray(noise_fraction_L1, dtype=object)
+    data["noise_fraction_L1"] = mean_auc
+    data["noise_fraction_L1_per_pool"] = per_pool_auc
     if fixed_FPR:
-        data["noise_fraction_tpr_at_fpr_L1"] = np.asarray(noise_fraction_tpr_at_fpr_L1, dtype=object)
+        data["noise_fraction_tpr_at_fpr_L1"] = mean_tpr
+        data["noise_fraction_tpr_at_fpr_L1_per_pool"] = per_pool_tpr
 else:
-    data["noise_fraction_LLR"] = np.asarray(noise_fraction_LLR, dtype=object)
+    data["noise_fraction_LLR"] = mean_auc
+    data["noise_fraction_LLR_per_pool"] = per_pool_auc
     if fixed_FPR:
-        data["noise_fraction_tpr_at_fpr_LLR"] = np.asarray(noise_fraction_tpr_at_fpr_LLR, dtype=object)
+        data["noise_fraction_tpr_at_fpr_LLR"] = mean_tpr
+        data["noise_fraction_tpr_at_fpr_LLR_per_pool"] = per_pool_tpr
 
 meta = {
-    "seed": _flags["seed"],
+    "seed": base_seed,
     "disease": sys.argv[1] if len(sys.argv) >= 2 else None,
     "L1_or_LLR": L1_or_LLR,
     "pool_idx": POOL_IDX,
     "random_sample_size": RANDOM_SAMPLE_SIZE,
     "fixed_FPR": fixed_FPR,
     "num_orders": num_orders,
+    "num_pools": NUM_POOLS,
+    "pool_seeds": pool_seeds,
     "stratifying": stratifying,
 }
 

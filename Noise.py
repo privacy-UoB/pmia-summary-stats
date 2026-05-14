@@ -1,4 +1,7 @@
+import os
+import random
 import sys
+
 import numpy as np
 import matplotlib
 
@@ -9,10 +12,16 @@ seed_all(_flags["seed"])
 
 if len(sys.argv) >= 6 or _flags["replot"]:
     matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from plot_style import line_kwargs, stacked_auc_tpr, METRIC_COLOR
-from utils_datasets import load_dataset, D3, D17
-from utils import auc_scores, Gaussian_noise
+import matplotlib.pyplot as plt  # noqa: E402
+from plot_style import line_kwargs, stacked_auc_tpr, METRIC_COLOR  # noqa: E402
+from utils_datasets import load_dataset, D3, D17  # noqa: E402
+from fast_paths import noise_curves  # noqa: E402
+
+
+# Random-pool sampling variance at n=65 is large, so the miRNA random-pool
+# panel (Fig 2b / 9b) averages over K independent pool draws. All other
+# configurations (case pool, longitudinal datasets) keep K=1.
+NUM_POOLS_DEFAULT = 20
 
 
 def make_figure(data: dict, output_path: str | None) -> None:
@@ -155,8 +164,14 @@ if _flags["replot"]:
 
 fixed_FPR = True
 include_longitudinals = True if dataset != "miRNA" else False
-iterations = 1 # to exclude repeating without additional longitudinal entries
-num_orders = 2000 # number of iterations to average over
+# Env overrides for cheap smoke tests and runtime tuning.
+num_orders = int(os.environ.get("NUM_ORDERS", 2000))
+_num_pools_default = int(os.environ.get("NUM_POOLS", NUM_POOLS_DEFAULT))
+# Only the miRNA + random-pool config suffers single-pool sampling variance.
+average_over_pools = (dataset == "miRNA" and POOL_IDX == 0)
+NUM_POOLS = _num_pools_default if average_over_pools else 1
+base_seed = _flags["seed"]
+
 # noise ranges:
 ranges = [[0, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1], # 0
               np.arange(0, 8, 0.04), # 1, sufficient for m * sigma_j
@@ -169,125 +184,99 @@ ranges = [[0, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.
 # so the same range works across all datasets:
 deviation_range = np.logspace(-2, 2, 50) # 0.01*sigma to 100*sigma
 
-# load partitioned dataset
+# Choose multiplier axis from dataset (deferred — actual pop/pool loads happen
+# inside the pool loop below for the miRNA path).
 if dataset == "miRNA":
-    include_longitudinals = False # failsafe
-    populations, pools = load_dataset(miRNA=True, disease_case_sample=DISEASE, random_sample_size=RANDOM_SAMPLE_SIZE)
-    # 0 = random, 1 = case:
-    pop = populations[POP_IDX]
-    pool = pools[POOL_IDX]
-    multiplier = ranges[4]
-    if include_deviations == True:
-        multiplier = deviation_range
-
+    include_longitudinals = False  # failsafe
+    multiplier = deviation_range if include_deviations else ranges[4]
 elif dataset == "Timestamp":
-    population, chosen_pool = load_dataset(timestamp=True)
     multiplier = ranges[2]
-
 elif dataset == "FitBit":
-    population, chosen_pool = load_dataset(FitBit=True)
-    multiplier = ranges[6]
-    if include_deviations == True:
-        multiplier = deviation_range
-
+    multiplier = deviation_range if include_deviations else ranges[6]
 elif dataset == "Electricity":
-    population, chosen_pool = load_dataset(electricity=True)
     multiplier = ranges[2]
-
-if include_longitudinals:
-    noisy_longitudinals_L1 = []
-    noisy_longitudinals_LLR = []
-    if fixed_FPR == True:
-        noisy_longitudinals_tpr_L1 = []
-        noisy_longitudinals_tpr_LLR = []
-
-    error_bands = True # if we wish to include min/max AUC scores over all iterations
-    if error_bands == False:
-        L1_or_LLR = "LLR" # graph is too messy with all longitudinals over both L1 and LLR
-
-    if dataset == "FitBit":
-        iterations = 8
-    else:
-        iterations = len(population)
-else:
-    error_bands = False
 
 L1_or_LLR = locals().get("L1_or_LLR", "LLR")
+error_bands = include_longitudinals  # min/max bands only meaningful when iterating timepoints
 
-for i in range(iterations): # multiple if include_longitudinals, 1 otherwise
-    auc_L1 = []
-    auc_LLR = []
-    if fixed_FPR == True:
-        tpr_at_fpr_L1 = []
-        tpr_at_fpr_LLR = []
 
-    # configuring the reference pop & pool to match the dataframe of a particular data entry
-    if include_longitudinals:
+def _load_for_pool(pool_seed: int):
+    """Reseed + load dataset for one pool draw (miRNA random-pool path only)."""
+    np.random.seed(pool_seed)
+    random.seed(pool_seed)
+    populations, pools = load_dataset(
+        miRNA=True, disease_case_sample=DISEASE, random_sample_size=RANDOM_SAMPLE_SIZE)
+    return populations[POP_IDX], pools[POOL_IDX]
+
+
+if dataset == "miRNA":
+    # miRNA path: K-pool averaging (K=1 for case pool, K=NUM_POOLS for random pool).
+    pool_auc_L1, pool_auc_LLR, pool_tpr_L1, pool_tpr_LLR = [], [], [], []
+    pool_seeds = []
+    for k in range(NUM_POOLS):
+        pool_seed = base_seed * 1000 + k if average_over_pools else base_seed
+        pool_seeds.append(pool_seed)
+        print(f"\n=== pool {k + 1}/{NUM_POOLS}  (seed={pool_seed}) ===", flush=True)
+
+        pop, pool = _load_for_pool(pool_seed)
+        sigma_j = np.std(pop, axis=0).to_numpy() if include_deviations else None
+
+        out = noise_curves(
+            pop.to_numpy(np.float64), pool.to_numpy(np.float64),
+            list(multiplier), num_orders,
+            include_deviations=include_deviations,
+            sigma_j=sigma_j, rng_np=np.random, clip=True,
+            target_fpr=1e-2)
+        pool_auc_L1.append(out["auc_L1"])
+        pool_auc_LLR.append(out["auc_LLR"])
+        pool_tpr_L1.append(out["tpr_L1"])
+        pool_tpr_LLR.append(out["tpr_LLR"])
+
+    per_pool_auc_L1 = np.stack(pool_auc_L1, axis=0)
+    per_pool_auc_LLR = np.stack(pool_auc_LLR, axis=0)
+    per_pool_tpr_L1 = np.stack(pool_tpr_L1, axis=0)
+    per_pool_tpr_LLR = np.stack(pool_tpr_LLR, axis=0)
+    auc_L1 = per_pool_auc_L1.mean(axis=0)
+    auc_LLR = per_pool_auc_LLR.mean(axis=0)
+    tpr_at_fpr_L1 = per_pool_tpr_L1.mean(axis=0)
+    tpr_at_fpr_LLR = per_pool_tpr_LLR.mean(axis=0)
+    iterations = 1
+else:
+    # Longitudinal datasets: each "iteration" is a different timepoint snapshot.
+    if dataset == "Timestamp":
+        population, chosen_pool = load_dataset(timestamp=True)
+    elif dataset == "FitBit":
+        population, chosen_pool = load_dataset(FitBit=True)
+    elif dataset == "Electricity":
+        population, chosen_pool = load_dataset(electricity=True)
+    iterations = 8 if dataset == "FitBit" else len(population)
+    pool_seeds = [base_seed]
+
+    noisy_longitudinals_L1 = []
+    noisy_longitudinals_LLR = []
+    noisy_longitudinals_tpr_L1 = []
+    noisy_longitudinals_tpr_LLR = []
+
+    for i in range(iterations):
         pop = population[i]
         pool = chosen_pool[i]
-    elif dataset != "miRNA":
-        pop = population[0]
-        pool = chosen_pool[0]
+        sigma_j = (np.std(pop, axis=0)
+                   if include_deviations else None)
+        if hasattr(sigma_j, "to_numpy"):
+            sigma_j = sigma_j.to_numpy()
 
-    if include_deviations == True:
-        sigma_j = np.std(pop, axis=0) # this is doing it over all the features (e.g. miRNAs)
+        print(f"\n=== timepoint {i + 1}/{iterations} ===", flush=True)
+        out = noise_curves(
+            np.asarray(pop, dtype=np.float64), np.asarray(pool, dtype=np.float64),
+            list(multiplier), num_orders,
+            include_deviations=include_deviations,
+            sigma_j=sigma_j, rng_np=np.random, clip=False,
+            target_fpr=1e-2)
+        noisy_longitudinals_L1.append(out["auc_L1"])
+        noisy_longitudinals_LLR.append(out["auc_LLR"])
+        noisy_longitudinals_tpr_L1.append(out["tpr_L1"])
+        noisy_longitudinals_tpr_LLR.append(out["tpr_LLR"])
 
-    for count, m in enumerate(multiplier):
-        aucs_L1 = []
-        aucs_LLR = []
-        if fixed_FPR == True:
-            tpr_at_fprs_L1 = []
-            tpr_at_fprs_LLR = []
-        print("iteration", count)
-
-        # for loop for numorder lots of train/test, then average at end
-        for j in range (num_orders):
-
-            # the 'noise' increases throughout each of the later timepoints the data is collected from
-            # changed from m * sigmaj so it's not tailored variance to each feature
-            deviation = m if include_deviations == False else m * sigma_j
-
-            if dataset == "miRNA":
-                noisy_pop, noisy_pool = Gaussian_noise(pop, pool, 0, deviation, clip=True) # make noise non-negative
-            else:
-                noisy_pop, noisy_pool = Gaussian_noise(pop, pool, 0, deviation)
-
-            # get performance/accuracy for L1 & LLR statistics over the noisy stat inputs compared to the 'original' pop & pool
-            roc_L1 = auc_scores(noisy_pop, noisy_pool, pop, pool, p_values=False)
-            roc_LLR = auc_scores(noisy_pop, noisy_pool, pop, pool, LR=True, p_values=False)
-
-            aucs_L1.append(roc_L1)
-            aucs_LLR.append(roc_LLR)
-
-            if fixed_FPR == True:
-                fpr_L1, tpr_L1, thresholds_L1 = auc_scores(noisy_pop, noisy_pool, pop, pool, FPR=True)
-                fpr_LLR, tpr_LLR, thresholds_LLR = auc_scores(noisy_pop, noisy_pool, pop, pool, LR=True, FPR=True)
-
-                # TPR at a fixed FPR (e.g., 0.01 = 1%)
-                target_fpr = 1e-2
-                tpr_at_fprs_L1.append(np.interp(target_fpr, fpr_L1, tpr_L1))
-                tpr_at_fprs_LLR.append(np.interp(target_fpr, fpr_LLR, tpr_LLR))
-
-        # num_order rows of datasets, columns are each longitudinal entry
-        if len(aucs_L1) >0:
-            auc_L1.append(np.average(aucs_L1))
-
-        if len(aucs_LLR) >0:
-            auc_LLR.append(np.average(aucs_LLR))
-
-        if fixed_FPR == True:
-            if len(tpr_at_fprs_L1) >0:
-                tpr_at_fpr_L1.append(np.average(tpr_at_fprs_L1))
-
-            if len(tpr_at_fprs_LLR) >0:
-                tpr_at_fpr_LLR.append(np.average(tpr_at_fprs_LLR))
-
-    if include_longitudinals:
-        noisy_longitudinals_L1.append(auc_L1)
-        noisy_longitudinals_LLR.append(auc_LLR)
-        if fixed_FPR == True:
-            noisy_longitudinals_tpr_L1.append(tpr_at_fpr_L1)
-            noisy_longitudinals_tpr_LLR.append(tpr_at_fpr_LLR)
 
 # Build the figure-data dict and save before plotting.
 data = {
@@ -301,9 +290,13 @@ data = {
 if not include_longitudinals:
     data["auc_L1"] = np.asarray(auc_L1)
     data["auc_LLR"] = np.asarray(auc_LLR)
+    data["auc_L1_per_pool"] = per_pool_auc_L1
+    data["auc_LLR_per_pool"] = per_pool_auc_LLR
     if fixed_FPR:
         data["tpr_at_fpr_L1"] = np.asarray(tpr_at_fpr_L1)
         data["tpr_at_fpr_LLR"] = np.asarray(tpr_at_fpr_LLR)
+        data["tpr_at_fpr_L1_per_pool"] = per_pool_tpr_L1
+        data["tpr_at_fpr_LLR_per_pool"] = per_pool_tpr_LLR
 else:
     data["noisy_longitudinals_L1"] = np.asarray(noisy_longitudinals_L1, dtype=object)
     data["noisy_longitudinals_LLR"] = np.asarray(noisy_longitudinals_LLR, dtype=object)
@@ -312,7 +305,7 @@ else:
         data["noisy_longitudinals_tpr_LLR"] = np.asarray(noisy_longitudinals_tpr_LLR, dtype=object)
 
 meta = {
-    "seed": _flags["seed"],
+    "seed": base_seed,
     "dataset": dataset,
     "disease": sys.argv[3] if len(sys.argv) >= 4 else None,
     "pop_idx": POP_IDX,
@@ -322,6 +315,8 @@ meta = {
     "fixed_FPR": fixed_FPR,
     "include_longitudinals": include_longitudinals,
     "num_orders": num_orders,
+    "num_pools": NUM_POOLS,
+    "pool_seeds": pool_seeds,
     "iterations": iterations,
 }
 

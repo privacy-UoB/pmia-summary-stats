@@ -68,10 +68,6 @@ def LLR(
     sigma = np.std(population, axis=0, ddof=0)
     sigma_hat = np.std(pool, axis=0, ddof=0)
 
-    print(X_victim.shape, mu.shape, var.shape)
-    
-    p = np.square(X_victim - mu)
-    print(p.shape)
     population_difference = np.divide(np.square(X_victim - mu),2*var)
     pool_difference = np.divide(np.square(X_victim - mu_hat),2*var_hat)
 
