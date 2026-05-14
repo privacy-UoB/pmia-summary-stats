@@ -26,7 +26,7 @@ from scipy.spatial.distance import cdist
 warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"utils")
 
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
-from utils import auc_scores, LLR
+from utils import auc_scores, LLR, tpr_at_fpr
 
 NUM_ITERATIONS = 500
 NUM_WORKERS = max(1, os.cpu_count() - 1)
@@ -116,12 +116,14 @@ def _one_iteration(seed):
             synth_pool = _reconstruct(
                 pool0, pool_betas, pool_alphas, pool_resid, nn_pool, cond)
             with contextlib.redirect_stdout(io.StringIO()):
-                roc_llr, _, _ = auc_scores(synth_pop, synth_pool, pop0, pool0,
-                                           LR=True)
-                roc_l1, _, _ = auc_scores(synth_pop, synth_pool, pop0, pool0,
-                                          LR=False)
+                roc_llr, sp_llr, sm_llr = auc_scores(
+                    synth_pop, synth_pool, pop0, pool0, LR=True)
+                roc_l1, sp_l1, sm_l1 = auc_scores(
+                    synth_pop, synth_pool, pop0, pool0, LR=False)
             results[f"t{t}_{cond}_LLR"] = roc_llr
             results[f"t{t}_{cond}_L1"] = roc_l1
+            results[f"t{t}_{cond}_LLR_tpr"] = tpr_at_fpr(sp_llr, sm_llr)
+            results[f"t{t}_{cond}_L1_tpr"] = tpr_at_fpr(sp_l1, sm_l1)
 
         # Full-NN reference: assign each individual their NN's entire drift
         nn_pop_diff = pop_diff[nn_pop]
@@ -129,12 +131,14 @@ def _one_iteration(seed):
         noisy_pop = pop0 + nn_pop_diff
         noisy_pool = pool0 + nn_pool_diff
         with contextlib.redirect_stdout(io.StringIO()):
-            roc_nn_llr, _, _ = auc_scores(noisy_pop, noisy_pool, pop0, pool0,
-                                          LR=True)
-            roc_nn_l1, _, _ = auc_scores(noisy_pop, noisy_pool, pop0, pool0,
-                                         LR=False)
+            roc_nn_llr, sp_nn_llr, sm_nn_llr = auc_scores(
+                noisy_pop, noisy_pool, pop0, pool0, LR=True)
+            roc_nn_l1, sp_nn_l1, sm_nn_l1 = auc_scores(
+                noisy_pop, noisy_pool, pop0, pool0, LR=False)
         results[f"t{t}_full_nn_LLR"] = roc_nn_llr
         results[f"t{t}_full_nn_L1"] = roc_nn_l1
+        results[f"t{t}_full_nn_LLR_tpr"] = tpr_at_fpr(sp_nn_llr, sm_nn_llr)
+        results[f"t{t}_full_nn_L1_tpr"] = tpr_at_fpr(sp_nn_l1, sm_nn_l1)
 
         # Random permutation shuffle reference
         perm_pop_diff = pop_diff[rng.permutation(n_pop)]
@@ -142,12 +146,14 @@ def _one_iteration(seed):
         noisy_pop = pop0 + perm_pop_diff
         noisy_pool = pool0 + perm_pool_diff
         with contextlib.redirect_stdout(io.StringIO()):
-            roc_perm_llr, _, _ = auc_scores(noisy_pop, noisy_pool, pop0, pool0,
-                                            LR=True)
-            roc_perm_l1, _, _ = auc_scores(noisy_pop, noisy_pool, pop0, pool0,
-                                           LR=False)
+            roc_perm_llr, sp_perm_llr, sm_perm_llr = auc_scores(
+                noisy_pop, noisy_pool, pop0, pool0, LR=True)
+            roc_perm_l1, sp_perm_l1, sm_perm_l1 = auc_scores(
+                noisy_pop, noisy_pool, pop0, pool0, LR=False)
         results[f"t{t}_perm_LLR"] = roc_perm_llr
         results[f"t{t}_perm_L1"] = roc_perm_l1
+        results[f"t{t}_perm_LLR_tpr"] = tpr_at_fpr(sp_perm_llr, sm_perm_llr)
+        results[f"t{t}_perm_L1_tpr"] = tpr_at_fpr(sp_perm_l1, sm_perm_l1)
 
     return results
 
@@ -186,6 +192,9 @@ def run():
                 col = f"t{t}_{cond}_{metric}"
                 if col in df_all.columns:
                     row[f"t{t}_{metric}"] = df_all[col].mean()
+                tpr_col = f"t{t}_{cond}_{metric}_tpr"
+                if tpr_col in df_all.columns:
+                    row[f"t{t}_{metric}_tpr"] = df_all[tpr_col].mean()
         rows.append(row)
 
     df_out = pd.DataFrame(rows)
@@ -193,9 +202,8 @@ def run():
     print(f"\nSaved fig_linear_residual.csv")
     print(df_out.to_string(index=False))
 
-    # ---- Plot: 1×2 grouped bar chart ----
+    # ---- Plot: 1×2 grouped bar chart (AUC + TPR variants) ----
     _setup_rc()
-    fig, (ax_llr, ax_l1) = plt.subplots(1, 2, figsize=(12, 5))
 
     # Helper to look up a value from df_out
     def _val(cond, metric_col):
@@ -205,38 +213,44 @@ def run():
     x = np.arange(len(group_labels))
     width = 0.35
 
-    for ax, metric, title in [(ax_llr, "LLR", "LLR"), (ax_l1, "L1", "L1")]:
-        col = f"t1_{metric}"
-        # Self linear: self_self (self residual), self_nn (nn residual)
-        self_lin = [_val("self_self", col), _val("self_nn", col)]
-        # NN linear: nn_self (self residual), nn_nn (nn residual)
-        nn_lin = [_val("nn_self", col), _val("nn_nn", col)]
+    def _plot_panel(col_suffix, ylabel, ylim, output_path):
+        fig, (ax_llr, ax_l1) = plt.subplots(1, 2, figsize=(12, 5))
+        for ax, metric, title in [(ax_llr, "LLR", "LLR"),
+                                  (ax_l1, "L1", "L1")]:
+            col = f"t1_{metric}{col_suffix}"
+            self_lin = [_val("self_self", col), _val("self_nn", col)]
+            nn_lin = [_val("nn_self", col), _val("nn_nn", col)]
 
-        ax.bar(x - width / 2, self_lin, width, label="Self linear",
-               color="tab:blue")
-        ax.bar(x + width / 2, nn_lin, width, label="NN linear",
-               color="tab:orange")
+            ax.bar(x - width / 2, self_lin, width, label="Self linear",
+                   color="tab:blue")
+            ax.bar(x + width / 2, nn_lin, width, label="NN linear",
+                   color="tab:orange")
 
-        # Reference line: real drift
-        real_val = _val("self_self", col)
-        ax.axhline(real_val, ls=":", lw=1, color="grey", alpha=0.6)
-        ax.text(0.02, real_val, "real drift", va="bottom", fontsize=8,
-                color="grey", alpha=0.8, ha="left",
-                transform=ax.get_yaxis_transform())
+            real_val = _val("self_self", col)
+            ax.axhline(real_val, ls=":", lw=1, color="grey", alpha=0.6)
+            ax.text(0.02, real_val, "real drift", va="bottom", fontsize=8,
+                    color="grey", alpha=0.8, ha="left",
+                    transform=ax.get_yaxis_transform())
 
-        ax.set_xticks(x)
-        ax.set_xticklabels(group_labels)
-        ax.set_ylabel("AUC")
-        ax.set_ylim(0.5, 1)
-        ax.set_title(title)
-        ax.grid(True, alpha=0.3, axis="y")
+            ax.set_xticks(x)
+            ax.set_xticklabels(group_labels)
+            ax.set_ylabel(ylabel)
+            ax.set_ylim(*ylim)
+            ax.set_title(title)
+            ax.grid(True, alpha=0.3, axis="y")
 
-    handles, labels = ax_llr.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=2, fontsize=9,
-               bbox_to_anchor=(0.5, -0.02))
-    plt.tight_layout(rect=[0, 0.06, 1, 1])
-    fig.savefig("fig_linear_residual.pdf", dpi=300, bbox_inches="tight")
-    print("Saved fig_linear_residual.pdf")
+        handles, labels = ax_llr.get_legend_handles_labels()
+        fig.legend(handles, labels, loc="lower center", ncol=2, fontsize=9,
+                   bbox_to_anchor=(0.5, -0.02))
+        plt.tight_layout(rect=[0, 0.06, 1, 1])
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved {output_path}")
+
+    _plot_panel(col_suffix="", ylabel="AUC", ylim=(0.5, 1),
+                output_path="fig_linear_residual.pdf")
+    _plot_panel(col_suffix="_tpr", ylabel="TPR at 0.01 FPR", ylim=(0, 1),
+                output_path="fig_linear_residual_tpr.pdf")
 
 
 if __name__ == "__main__":

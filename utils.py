@@ -156,6 +156,18 @@ def auc_scores(victim_pop, victim_pool, pop, pool, LR=False, p_values=True, FPR=
         scores = (fpr, tpr, thresholds)
     return scores
 
+
+def tpr_at_fpr(scores_pop, scores_pool, target_fpr=0.01):
+    """TPR at a fixed FPR from two score arrays via linear interpolation.
+
+    Matches the recipe used by fast_paths.batched_auc_tpr."""
+    sp = np.ravel(scores_pop)
+    sm = np.ravel(scores_pool)
+    y_true = np.concatenate([np.zeros(len(sp)), np.ones(len(sm))])
+    y_score = np.concatenate([sp, sm])
+    fpr_curve, tpr_curve, _ = roc_curve(y_true, y_score)
+    return float(np.interp(target_fpr, fpr_curve, tpr_curve))
+
 def Gaussian_noise(pop, pool, mean, deviation, clip=False, mean2=None, deviation2=None):
     pop_noise = np.random.normal(mean, deviation, pop.shape)
     pool_noise = (np.random.normal(mean, deviation, pool.shape)) if deviation2 is None else (np.random.normal(mean2, deviation2, pool.shape))

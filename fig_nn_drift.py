@@ -25,7 +25,7 @@ from scipy.spatial.distance import cdist
 warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"utils")
 
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
-from utils import auc_scores
+from utils import auc_scores, tpr_at_fpr
 
 NUM_ITERATIONS = 2000
 NUM_WORKERS = max(1, os.cpu_count() - 1)
@@ -107,10 +107,12 @@ def _one_iteration(seed):
 
     def _score_both(vp, vpl, p, pl, prefix):
         with contextlib.redirect_stdout(io.StringIO()):
-            roc_llr, _, _ = auc_scores(vp, vpl, p, pl, LR=True)
-            roc_l1, _, _ = auc_scores(vp, vpl, p, pl, LR=False)
+            roc_llr, sp_llr, sm_llr = auc_scores(vp, vpl, p, pl, LR=True)
+            roc_l1, sp_l1, sm_l1 = auc_scores(vp, vpl, p, pl, LR=False)
         results[f"{prefix}_llr"] = roc_llr
         results[f"{prefix}_l1"] = roc_l1
+        results[f"{prefix}_llr_tpr"] = tpr_at_fpr(sp_llr, sm_llr)
+        results[f"{prefix}_l1_tpr"] = tpr_at_fpr(sp_l1, sm_l1)
 
     # 1. Real drift
     _score_both(t_pop, t_pool, pop0, pool0, "real")
@@ -176,15 +178,19 @@ def run():
             "model": label,
             "llr": df_all[f"{key}_llr"].mean(),
             "l1": df_all[f"{key}_l1"].mean(),
+            "llr_tpr": df_all[f"{key}_llr_tpr"].mean(),
+            "l1_tpr": df_all[f"{key}_l1_tpr"].mean(),
         })
 
     df_out = pd.DataFrame(rows)
     df_out.to_csv("fig_nn_drift.csv", index=False)
 
-    print(f"\n{'Model':<25s} {'LLR':>8s} {'L1':>8s}")
-    print("-" * 43)
+    print(f"\n{'Model':<25s} {'AUC LLR':>9s} {'AUC L1':>9s} "
+          f"{'TPR LLR':>9s} {'TPR L1':>9s}")
+    print("-" * 65)
     for _, row in df_out.iterrows():
-        print(f"{row['model']:<25s} {row['llr']:8.3f} {row['l1']:8.3f}")
+        print(f"{row['model']:<25s} {row['llr']:9.3f} {row['l1']:9.3f} "
+              f"{row['llr_tpr']:9.3f} {row['l1_tpr']:9.3f}")
 
     # ---- Appendix table: NN k-sweep by metric ----
     app_rows = []
@@ -193,6 +199,8 @@ def run():
     for metric in NN_METRICS:
         app_row[f"{metric}_llr"] = df_all["real_llr"].mean()
         app_row[f"{metric}_l1"] = df_all["real_l1"].mean()
+        app_row[f"{metric}_llr_tpr"] = df_all["real_llr_tpr"].mean()
+        app_row[f"{metric}_l1_tpr"] = df_all["real_l1_tpr"].mean()
     app_rows.append(app_row)
 
     for k in K_VALUES:
@@ -204,6 +212,9 @@ def run():
                 col = f"{metric}_k{k}_{score}"
                 if col in df_all.columns:
                     app_row[f"{metric}_{score}"] = df_all[col].mean()
+                tpr_col = f"{metric}_k{k}_{score}_tpr"
+                if tpr_col in df_all.columns:
+                    app_row[f"{metric}_{score}_tpr"] = df_all[tpr_col].mean()
         app_rows.append(app_row)
 
     df_app = pd.DataFrame(app_rows)
@@ -225,12 +236,6 @@ def run():
         "axes.titlesize": 12,
     })
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-    nn_rows = df_app[df_app["k"] > 0]
-    k_plot = nn_rows["k"].astype(int).values
-    pctl_vals = nn_rows["pctl"].values
-
     metric_colors = {"euclidean": "C0", "cosine": "C1", "correlation": "C2"}
     metric_labels = {"euclidean": "Euclidean", "cosine": "Cosine",
                      "correlation": "Correlation"}
@@ -241,41 +246,59 @@ def run():
         ("indep_gauss",   "Independent Gaussian",  "C4", ":",  2.0),
         ("loo_cond_mean", "LOO conditional mean",  "C5", "-.", 2.0),
     ]
-    ref_vals = {key: {s: df_all[f"{key}_{s}"].mean() for s in ["llr", "l1"]}
-                for key, _, _, _, _ in ref_lines}
 
-    for ax, score, score_label in zip(axes, ["llr", "l1"], ["LLR", "L1"]):
-        # NN curves per metric
-        for metric in NN_METRICS:
-            col = f"{metric}_{score}"
-            if col in nn_rows.columns:
-                ax.plot(k_plot, nn_rows[col].values, "o-", ms=6, lw=1.5,
-                        color=metric_colors[metric], label=metric_labels[metric])
+    def _plot_k_sweep(score_suffix, score_label, ylabel, ylim, output_path):
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        nn_rows = df_app[df_app["k"] > 0]
+        k_plot = nn_rows["k"].astype(int).values
+        pctl_vals = nn_rows["pctl"].values
 
-        # Reference lines
-        for key, label, color, ls, lw in ref_lines:
-            ax.axhline(ref_vals[key][score], ls=ls, lw=lw, color=color,
-                       alpha=0.8, label=label)
+        ref_vals = {
+            key: {s: df_all[f"{key}_{s}{score_suffix}"].mean() for s in ["llr", "l1"]}
+            for key, _, _, _, _ in ref_lines
+        }
 
-        ax.set_xscale("log")
-        ax.set_xlabel("k (number of nearest neighbors)")
-        ax.set_ylabel(f"AUC ({score_label})")
-        ax.set_ylim(0.5, 1)
-        ax.set_title(f"({chr(97 + list(axes).index(ax))}) {score_label} test")
-        ax.legend(fontsize=8, loc="best")
-        ax.grid(True, alpha=0.3)
+        for ax, score, label in zip(axes, ["llr", "l1"], score_label):
+            for metric in NN_METRICS:
+                col = f"{metric}_{score}{score_suffix}"
+                if col in nn_rows.columns:
+                    ax.plot(k_plot, nn_rows[col].values, "o-", ms=6, lw=1.5,
+                            color=metric_colors[metric],
+                            label=metric_labels[metric])
 
-        # Secondary x-axis: percentile
-        ax_top = ax.twiny()
-        ax_top.set_xscale("log")
-        ax_top.set_xlim(ax.get_xlim())
-        ax_top.set_xticks(k_plot)
-        ax_top.set_xticklabels([f"{p:.0f}%" for p in pctl_vals], fontsize=8)
-        ax_top.set_xlabel("Percentile of pairwise distances", fontsize=10)
+            for key, ref_label, color, ls, lw in ref_lines:
+                ax.axhline(ref_vals[key][score], ls=ls, lw=lw, color=color,
+                           alpha=0.8, label=ref_label)
 
-    plt.tight_layout()
-    fig.savefig("fig_nn_drift.pdf", dpi=300, bbox_inches="tight")
-    print("Saved fig_nn_drift.pdf")
+            ax.set_xscale("log")
+            ax.set_xlabel("k (number of nearest neighbors)")
+            ax.set_ylabel(f"{ylabel} ({label})")
+            ax.set_ylim(*ylim)
+            ax.set_title(f"({chr(97 + list(axes).index(ax))}) {label} test")
+            ax.legend(fontsize=8, loc="best")
+            ax.grid(True, alpha=0.3)
+
+            ax_top = ax.twiny()
+            ax_top.set_xscale("log")
+            ax_top.set_xlim(ax.get_xlim())
+            ax_top.set_xticks(k_plot)
+            ax_top.set_xticklabels([f"{p:.0f}%" for p in pctl_vals], fontsize=8)
+            ax_top.set_xlabel("Percentile of pairwise distances", fontsize=10)
+
+        plt.tight_layout()
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved {output_path}")
+
+    _plot_k_sweep(
+        score_suffix="", score_label=("LLR", "L1"),
+        ylabel="AUC", ylim=(0.5, 1), output_path="fig_nn_drift.pdf",
+    )
+    _plot_k_sweep(
+        score_suffix="_tpr", score_label=("LLR", "L1"),
+        ylabel="TPR at 0.01 FPR", ylim=(0, 1),
+        output_path="fig_nn_drift_tpr.pdf",
+    )
 
 
 if __name__ == "__main__":

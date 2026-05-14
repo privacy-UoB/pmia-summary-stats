@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import ShuffleSplit
 
 from plot_style import LLR_COLOR, line_kwargs
-from utils import auc_scores
+from utils import auc_scores, tpr_at_fpr
 from utils_datasets import (D1, D2, D3, D4, D5, D6, D7, D8, D9, D10,
                              D11, D12, D13, D14, D15, D16, D17, D18, D19)
 
@@ -164,25 +164,29 @@ def run_experiment(iterations=2000):
                     pop_cpool, case_pool, pop_cpool, case_pool, LR=True)
                 c_me_llr = compute_empirical_min_error_fast(
                     np.ravel(c_sp_llr), np.ravel(c_sm_llr))
+                c_tpr_llr = tpr_at_fpr(c_sp_llr, c_sm_llr)
             except Exception as e:
                 print(f"  WARN case LLR: {e}", file=sys.stderr)
-                c_auc_llr = c_me_llr = np.nan
+                c_auc_llr = c_me_llr = c_tpr_llr = np.nan
 
             try:
                 c_auc_l1, c_sp_l1, c_sm_l1 = auc_scores(
                     pop_cpool, case_pool, pop_cpool, case_pool, LR=False)
                 c_me_l1 = compute_empirical_min_error_fast(
                     np.ravel(c_sp_l1), np.ravel(c_sm_l1))
+                c_tpr_l1 = tpr_at_fpr(c_sp_l1, c_sm_l1)
             except Exception as e:
                 print(f"  WARN case L1: {e}", file=sys.stderr)
-                c_auc_l1 = c_me_l1 = np.nan
+                c_auc_l1 = c_me_l1 = c_tpr_l1 = np.nan
 
         print(f"  Case  AUC  LLR={c_auc_llr:.4f}  L1={c_auc_l1:.4f}")
         print(f"  Case  err  LLR={c_me_llr:.4f}  L1={c_me_l1:.4f}")
+        print(f"  Case  TPR  LLR={c_tpr_llr:.4f}  L1={c_tpr_l1:.4f}")
 
         # ── random-pool iterations ──
         r_llr_auc, r_l1_auc = [], []
         r_llr_me, r_l1_me = [], []
+        r_llr_tpr, r_l1_tpr = [], []
 
         for it in range(iterations):
             _, _, pop_rpool, rpool = get_disease_splits(filter_pop, disease)
@@ -195,6 +199,7 @@ def run_experiment(iterations=2000):
                         np.ravel(rsp_llr), np.ravel(rsm_llr))
                     r_llr_auc.append(ra_llr)
                     r_llr_me.append(rme_llr)
+                    r_llr_tpr.append(tpr_at_fpr(rsp_llr, rsm_llr))
                 except Exception:
                     pass
 
@@ -205,6 +210,7 @@ def run_experiment(iterations=2000):
                         np.ravel(rsp_l1), np.ravel(rsm_l1))
                     r_l1_auc.append(ra_l1)
                     r_l1_me.append(rme_l1)
+                    r_l1_tpr.append(tpr_at_fpr(rsp_l1, rsm_l1))
                 except Exception:
                     pass
 
@@ -215,6 +221,7 @@ def run_experiment(iterations=2000):
         avg = lambda lst: np.mean(lst) if lst else np.nan
         print(f"  Rand  AUC  LLR={avg(r_llr_auc):.4f}  L1={avg(r_l1_auc):.4f}")
         print(f"  Rand  err  LLR={avg(r_llr_me):.4f}  L1={avg(r_l1_me):.4f}")
+        print(f"  Rand  TPR  LLR={avg(r_llr_tpr):.4f}  L1={avg(r_l1_tpr):.4f}")
 
         results.append({
             "disease": f"D{idx + 1}",
@@ -233,6 +240,10 @@ def run_experiment(iterations=2000):
             "random_emp_min_err_llr": avg(r_llr_me),
             "case_emp_min_err_l1": c_me_l1,
             "random_emp_min_err_l1": avg(r_l1_me),
+            "case_tpr_llr": c_tpr_llr,
+            "random_tpr_llr": avg(r_llr_tpr),
+            "case_tpr_l1": c_tpr_l1,
+            "random_tpr_l1": avg(r_l1_tpr),
         })
 
         # save incrementally so progress is preserved on interruption
@@ -244,15 +255,14 @@ def run_experiment(iterations=2000):
 
 # ── Two-panel figure ─────────────────────────────────────────────────────────
 
-def make_figure(csv_path="results/19disease_results.csv"):
-    """Generate 2-panel figure from results CSV.
+def _make_two_panel(df, case_col, random_col, metric_label, panel_ylim,
+                     output_basename):
+    """Render the standard two-panel figure for a (case_col, random_col) pair.
 
-    Panel A: Pool size vs AUC (case and random curves).
-    Panel B: Case AUC vs Random AUC scatter with identity line.
+    Panel A: Pool size vs metric (case and random curves).
+    Panel B: Case metric vs Random metric scatter with identity line.
     """
-    df = pd.read_csv(csv_path)
     d2s = {f"D{i + 1}": s for i, (_, s) in enumerate(SHORT_NAMES.items())}
-    df = df.sort_values("A").reset_index(drop=True)
 
     plt.rcParams.update({
         "font.family": "serif",
@@ -262,54 +272,66 @@ def make_figure(csv_path="results/19disease_results.csv"):
     })
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-    # ── Panel A: Pool size vs AUC (both curves) ─────────────────────────
+    # ── Panel A: Pool size vs metric (both curves) ──────────────────────
     ax = axes[0]
-    ax.plot(df["A"], df["case_auc_llr"], label="Case pool", zorder=3,
+    ax.plot(df["A"], df[case_col], label="Case pool", zorder=3,
             **line_kwargs("LLR", "case", markersize=6,
                           markeredgecolor="k", markeredgewidth=0.5,
                           linestyle="None"))
-    ax.plot(df["A"], df["random_auc_llr"], label="Random pool", zorder=3,
+    ax.plot(df["A"], df[random_col], label="Random pool", zorder=3,
             **line_kwargs("LLR", "random", markersize=5, linewidth=1.2))
 
     for _, r in df.iterrows():
-        ax.annotate(d2s[r["disease"]], (r["A"], r["case_auc_llr"]),
+        ax.annotate(d2s[r["disease"]], (r["A"], r[case_col]),
                     fontsize=7, xytext=(3, 4), textcoords="offset points")
 
     ax.set_xlabel("Pool size $n$")
-    ax.set_ylabel("AUC (LLR)")
-    ax.set_ylim(0.5, 1)
-    ax.set_title("A. Pool size vs. AUC")
+    ax.set_ylabel(f"{metric_label} (LLR)")
+    ax.set_ylim(*panel_ylim)
+    ax.set_title(f"A. Pool size vs. {metric_label}")
     ax.legend(fontsize=9, loc="lower left")
 
-    # ── Panel B: Case AUC vs Random AUC ──────────────────────────────────
+    # ── Panel B: Case metric vs Random metric ───────────────────────────
     ax = axes[1]
-    lo = min(df["random_auc_llr"].min(), df["case_auc_llr"].min()) - 0.02
-    hi = max(df["random_auc_llr"].max(), df["case_auc_llr"].max()) + 0.02
+    lo = min(df[random_col].min(), df[case_col].min()) - 0.02
+    hi = max(df[random_col].max(), df[case_col].max()) + 0.02
     ax.plot([lo, hi], [lo, hi], "k--", lw=1, label="$y = x$", zorder=1)
 
-    ax.scatter(df["random_auc_llr"], df["case_auc_llr"],
+    ax.scatter(df[random_col], df[case_col],
                s=50, edgecolors="k", linewidths=0.5, c=LLR_COLOR, zorder=3)
     for _, r in df.iterrows():
         ax.annotate(d2s[r["disease"]],
-                    (r["random_auc_llr"], r["case_auc_llr"]),
+                    (r[random_col], r[case_col]),
                     fontsize=7, xytext=(3, 3), textcoords="offset points")
 
-    mean_gap = (df["case_auc_llr"] - df["random_auc_llr"]).mean()
+    mean_gap = (df[case_col] - df[random_col]).mean()
     ax.text(0.05, 0.95, f"Mean gap = {mean_gap:.3f}",
             transform=ax.transAxes, fontsize=9, va="top")
 
-    ax.set_xlabel("Random-pool AUC (LLR)")
-    ax.set_ylabel("Case-pool AUC (LLR)")
-    ax.set_title("B. Case vs. random AUC")
+    ax.set_xlabel(f"Random-pool {metric_label} (LLR)")
+    ax.set_ylabel(f"Case-pool {metric_label} (LLR)")
+    ax.set_title(f"B. Case vs. random {metric_label}")
     ax.set_xlim(lo, hi)
     ax.set_ylim(lo, hi)
     ax.set_aspect("equal")
     ax.legend(fontsize=9, loc="lower right")
 
     plt.tight_layout()
-    fig.savefig("fig_19disease.pdf", dpi=300, bbox_inches="tight")
-    fig.savefig("fig_19disease.png", dpi=300, bbox_inches="tight")
-    print("Saved fig_19disease.pdf and fig_19disease.png")
+    fig.savefig(f"{output_basename}.pdf", dpi=300, bbox_inches="tight")
+    fig.savefig(f"{output_basename}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved {output_basename}.pdf and {output_basename}.png")
+
+
+def make_figure(csv_path="results/19disease_results.csv"):
+    """Generate AUC and TPR@1%FPR figures from results CSV."""
+    df = pd.read_csv(csv_path)
+    df = df.sort_values("A").reset_index(drop=True)
+    _make_two_panel(df, "case_auc_llr", "random_auc_llr",
+                    "AUC", (0.5, 1), "fig_19disease")
+    if "case_tpr_llr" in df.columns and "random_tpr_llr" in df.columns:
+        _make_two_panel(df, "case_tpr_llr", "random_tpr_llr",
+                        "TPR @ 1% FPR", (0, 1), "fig_19disease_tpr")
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────

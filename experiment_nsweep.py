@@ -25,7 +25,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning,
                         module=r"utils")
 
 from plot_style import line_kwargs
-from utils import auc_scores
+from utils import auc_scores, tpr_at_fpr
 from utils_datasets import D1, D3, D14
 
 
@@ -158,8 +158,10 @@ def run_experiment(iterations=2000):
             # Accumulators
             c_llr_me, c_l1_me = [], []
             c_llr_auc, c_l1_auc = [], []
+            c_llr_tpr, c_l1_tpr = [], []
             r_llr_me, r_l1_me = [], []
             r_llr_auc, r_l1_auc = [], []
+            r_llr_tpr, r_l1_tpr = [], []
 
             for it in range(iterations):
                 # ── Case pool: subsample n from full case pool ──
@@ -174,6 +176,7 @@ def run_experiment(iterations=2000):
                             np.ravel(sp_c_llr), np.ravel(sm_c_llr))
                         c_llr_auc.append(auc_c_llr)
                         c_llr_me.append(me_c_llr)
+                        c_llr_tpr.append(tpr_at_fpr(sp_c_llr, sm_c_llr))
                     except Exception:
                         pass
 
@@ -184,6 +187,7 @@ def run_experiment(iterations=2000):
                             np.ravel(sp_c_l1), np.ravel(sm_c_l1))
                         c_l1_auc.append(auc_c_l1)
                         c_l1_me.append(me_c_l1)
+                        c_l1_tpr.append(tpr_at_fpr(sp_c_l1, sm_c_l1))
                     except Exception:
                         pass
 
@@ -200,6 +204,7 @@ def run_experiment(iterations=2000):
                             np.ravel(sp_r_llr), np.ravel(sm_r_llr))
                         r_llr_auc.append(auc_r_llr)
                         r_llr_me.append(me_r_llr)
+                        r_llr_tpr.append(tpr_at_fpr(sp_r_llr, sm_r_llr))
                     except Exception:
                         pass
 
@@ -210,6 +215,7 @@ def run_experiment(iterations=2000):
                             np.ravel(sp_r_l1), np.ravel(sm_r_l1))
                         r_l1_auc.append(auc_r_l1)
                         r_l1_me.append(me_r_l1)
+                        r_l1_tpr.append(tpr_at_fpr(sp_r_l1, sm_r_l1))
                     except Exception:
                         pass
 
@@ -244,6 +250,10 @@ def run_experiment(iterations=2000):
                 "case_auc_l1": avg(c_l1_auc),
                 "random_auc_llr": avg(r_llr_auc),
                 "random_auc_l1": avg(r_l1_auc),
+                "case_tpr_llr": avg(c_llr_tpr),
+                "case_tpr_l1": avg(c_l1_tpr),
+                "random_tpr_llr": avg(r_llr_tpr),
+                "random_tpr_l1": avg(r_l1_tpr),
                 "case_min_err_llr_std": std(c_llr_me),
                 "case_min_err_l1_std": std(c_l1_me),
                 "random_min_err_llr_std": std(r_llr_me),
@@ -252,6 +262,10 @@ def run_experiment(iterations=2000):
                 "case_auc_l1_std": std(c_l1_auc),
                 "random_auc_llr_std": std(r_llr_auc),
                 "random_auc_l1_std": std(r_l1_auc),
+                "case_tpr_llr_std": std(c_llr_tpr),
+                "case_tpr_l1_std": std(c_l1_tpr),
+                "random_tpr_llr_std": std(r_llr_tpr),
+                "random_tpr_l1_std": std(r_l1_tpr),
                 "n_ok_case_llr": len(c_llr_me),
                 "n_ok_case_l1": len(c_l1_me),
                 "n_ok_random_llr": len(r_llr_me),
@@ -285,9 +299,10 @@ def _setup_rc():
     })
 
 
-def make_auc_figure(csv_path="results/nsweep_results.csv"):
-    """nsweep_auc.pdf — AUC vs n, 1x3 panels ordered by increasing signal."""
-    df = pd.read_csv(csv_path)
+def _make_nsweep_figure(df, case_llr_col, case_l1_col, random_llr_col,
+                         random_l1_col, ylabel, ylim, output_path,
+                         baseline=None):
+    """Render the 1×3 nsweep panel for any metric (AUC or TPR@1%FPR)."""
     _setup_rc()
     fig, axes = plt.subplots(1, 3, figsize=(16, 5))
 
@@ -298,29 +313,63 @@ def make_auc_figure(csv_path="results/nsweep_results.csv"):
         ns = ddf["n"].values
         sig = ddf["signal_term"].iloc[0]
 
-        ax.axhline(0.5, color="grey", ls=":", lw=0.8, label="AUC = 0.5")
+        if baseline is not None:
+            value, label = baseline
+            ax.axhline(value, color="grey", ls=":", lw=0.8, label=label)
 
-        ax.plot(ns, ddf["case_auc_llr"].values, label="Case LLR",
+        ax.plot(ns, ddf[case_llr_col].values, label="Case LLR",
                 **line_kwargs("LLR", "case", markersize=4, linewidth=1.2))
-        ax.plot(ns, ddf["case_auc_l1"].values, label="Case L1",
+        ax.plot(ns, ddf[case_l1_col].values, label="Case L1",
                 **line_kwargs("L1", "case", markersize=4, linewidth=1.2))
-        ax.plot(ns, ddf["random_auc_llr"].values, label="Random LLR",
+        ax.plot(ns, ddf[random_llr_col].values, label="Random LLR",
                 **line_kwargs("LLR", "random", markersize=4, linewidth=1.2))
-        ax.plot(ns, ddf["random_auc_l1"].values, label="Random L1",
+        ax.plot(ns, ddf[random_l1_col].values, label="Random L1",
                 **line_kwargs("L1", "random", markersize=4, linewidth=1.2))
 
         ax.set_xlabel("Pool size n")
-        ax.set_ylabel("AUC")
-        ax.set_ylim(0.5, 1)
+        ax.set_ylabel(ylabel)
+        ax.set_ylim(*ylim)
         ax.set_title(f"{tag}: {meta['name']}  (signal = {sig:.1f})")
         ax.grid(True, alpha=0.3)
 
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=5, fontsize=9,
+    ncol = 5 if baseline is not None else 4
+    fig.legend(handles, labels, loc="lower center", ncol=ncol, fontsize=9,
                bbox_to_anchor=(0.5, -0.02))
     plt.tight_layout(rect=[0, 0.06, 1, 1])
-    fig.savefig("nsweep_auc.pdf", dpi=300, bbox_inches="tight")
-    print("Saved nsweep_auc.pdf")
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved {output_path}")
+
+
+def make_auc_figure(csv_path="results/nsweep_results.csv"):
+    """nsweep_auc.pdf — AUC vs n, 1x3 panels ordered by increasing signal."""
+    df = pd.read_csv(csv_path)
+    _make_nsweep_figure(
+        df,
+        case_llr_col="case_auc_llr", case_l1_col="case_auc_l1",
+        random_llr_col="random_auc_llr", random_l1_col="random_auc_l1",
+        ylabel="AUC", ylim=(0.5, 1),
+        output_path="nsweep_auc.pdf",
+        baseline=(0.5, "AUC = 0.5"),
+    )
+
+
+def make_tpr_figure(csv_path="results/nsweep_results.csv"):
+    """nsweep_tpr.pdf — TPR@1%FPR vs n, 1x3 panels ordered by increasing signal."""
+    df = pd.read_csv(csv_path)
+    if "case_tpr_llr" not in df.columns:
+        print("nsweep_tpr.pdf skipped: CSV is missing TPR columns "
+              "(rerun without --plot-only).")
+        return
+    _make_nsweep_figure(
+        df,
+        case_llr_col="case_tpr_llr", case_l1_col="case_tpr_l1",
+        random_llr_col="random_tpr_llr", random_l1_col="random_tpr_l1",
+        ylabel="TPR at 0.01 FPR", ylim=(0, 1),
+        output_path="nsweep_tpr.pdf",
+        baseline=(0.01, "TPR = FPR = 0.01"),
+    )
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
@@ -336,6 +385,8 @@ if __name__ == "__main__":
 
     if args.plot_only:
         make_auc_figure()
+        make_tpr_figure()
     else:
         run_experiment(iterations=args.iterations)
         make_auc_figure()
+        make_tpr_figure()
