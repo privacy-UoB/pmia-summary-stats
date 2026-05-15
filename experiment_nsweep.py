@@ -354,7 +354,6 @@ def make_auc_figure(csv_path="results/nsweep_results.csv"):
         random_llr_col="random_auc_llr", random_l1_col="random_auc_l1",
         ylabel="AUC", ylim=(0.5, 1),
         output_path="nsweep_auc.pdf",
-        baseline=(0.5, "AUC = 0.5"),
     )
 
 
@@ -371,7 +370,6 @@ def make_tpr_figure(csv_path="results/nsweep_results.csv"):
         random_llr_col="random_tpr_llr", random_l1_col="random_tpr_l1",
         ylabel="TPR at 0.01 FPR", ylim=(0, 1),
         output_path="nsweep_tpr.pdf",
-        baseline=(0.01, "TPR = FPR = 0.01"),
     )
 
 

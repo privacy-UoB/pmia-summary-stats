@@ -54,22 +54,22 @@ def make_figure(data: dict, output_path: str | None) -> None:
         if L1_or_LLR == "L1":
             ax_auc.plot(num_miRNAs, noise_fraction_L1[index],
                         color=c, linewidth=2.0,
-                        label=f"std. dev. = {noise}")
+                        label=rf"$\alpha = {noise}$")
             if fixed_FPR:
                 ax_tpr.plot(num_miRNAs, noise_fraction_tpr_at_fpr_L1[index],
                             color=c, linewidth=2.0,
-                            label=f"std. dev. = {noise}")
+                            label=rf"$\alpha = {noise}$")
         elif L1_or_LLR == "LLR":
             ax_auc.plot(num_miRNAs, noise_fraction_LLR[index],
                         color=c, linewidth=2.0,
-                        label=f"std. dev. = {noise}")
+                        label=rf"$\alpha = {noise}$")
             if fixed_FPR:
                 ax_tpr.plot(num_miRNAs, noise_fraction_tpr_at_fpr_LLR[index],
                             color=c, linewidth=2.0,
-                            label=f"std. dev. = {noise}")
+                            label=rf"$\alpha = {noise}$")
 
     ax_auc.invert_xaxis()
-    ax_auc.legend(loc='upper right')
+    ax_auc.legend(loc='upper right', title=r"noise std = $\alpha \cdot \sigma_j$")
     ax_auc.set_ylabel("AUC")
     ax_auc.set_ylim([0.5, 1])
     ax_auc.grid(True)

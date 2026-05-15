@@ -298,6 +298,7 @@ def _make_two_panel(df, case_col, random_col, metric_label,
     ax.set_ylabel(f"{metric_label} (LLR)")
     ax.set_ylim(lo, hi)
     ax.set_title(f"A. Pool size vs. {metric_label}")
+    ax.grid(True, alpha=0.3)
     ax.legend(fontsize=9, loc="lower left")
 
     # ── Panel B: Case metric vs Random metric ───────────────────────────
@@ -321,6 +322,7 @@ def _make_two_panel(df, case_col, random_col, metric_label,
     ax.set_xlim(lo, hi)
     ax.set_ylim(lo, hi)
     ax.set_aspect("equal")
+    ax.grid(True, alpha=0.3)
     ax.legend(fontsize=9, loc="lower right")
 
     plt.tight_layout()
