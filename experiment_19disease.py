@@ -260,12 +260,13 @@ def run_experiment(iterations=2000, seed=42):
 
 # ── Two-panel figure ─────────────────────────────────────────────────────────
 
-def _make_two_panel(df, case_col, random_col, metric_label, panel_ylim,
+def _make_two_panel(df, case_col, random_col, metric_label,
                      output_basename):
     """Render the standard two-panel figure for a (case_col, random_col) pair.
 
     Panel A: Pool size vs metric (case and random curves).
     Panel B: Case metric vs Random metric scatter with identity line.
+    Both panels share the same y-axis range, derived from the data.
     """
     d2s = {f"D{i + 1}": s for i, (_, s) in enumerate(SHORT_NAMES.items())}
 
@@ -276,6 +277,9 @@ def _make_two_panel(df, case_col, random_col, metric_label, panel_ylim,
         "axes.titlesize": 12,
     })
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    lo = min(df[random_col].min(), df[case_col].min()) - 0.02
+    hi = max(df[random_col].max(), df[case_col].max()) + 0.02
 
     # ── Panel A: Pool size vs metric (both curves) ──────────────────────
     ax = axes[0]
@@ -292,14 +296,12 @@ def _make_two_panel(df, case_col, random_col, metric_label, panel_ylim,
 
     ax.set_xlabel("Pool size $n$")
     ax.set_ylabel(f"{metric_label} (LLR)")
-    ax.set_ylim(*panel_ylim)
+    ax.set_ylim(lo, hi)
     ax.set_title(f"A. Pool size vs. {metric_label}")
     ax.legend(fontsize=9, loc="lower left")
 
     # ── Panel B: Case metric vs Random metric ───────────────────────────
     ax = axes[1]
-    lo = min(df[random_col].min(), df[case_col].min()) - 0.02
-    hi = max(df[random_col].max(), df[case_col].max()) + 0.02
     ax.plot([lo, hi], [lo, hi], "k--", lw=1, label="$y = x$", zorder=1)
 
     ax.scatter(df[random_col], df[case_col],
@@ -335,10 +337,10 @@ def make_figure(csv_path="results/19disease_results.csv"):
     df = pd.read_csv(csv_path)
     df = df.sort_values("A").reset_index(drop=True)
     _make_two_panel(df, "case_auc_llr", "random_auc_llr",
-                    "AUC", (0.5, 1), "fig_19disease")
+                    "AUC", "fig_19disease")
     if "case_tpr_llr" in df.columns and "random_tpr_llr" in df.columns:
         _make_two_panel(df, "case_tpr_llr", "random_tpr_llr",
-                        "TPR @ 1% FPR", (0, 1), "fig_19disease_tpr")
+                        "TPR @ 1% FPR", "fig_19disease_tpr")
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
