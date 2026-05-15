@@ -22,6 +22,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from experiment_io import resolve_output_path
 
 
 # --------------------------------------------------------------------------- #
@@ -524,9 +525,11 @@ def main():
         "(Scen A: D3 nsweep   |   Scen B: D3 random noise sweep)",
         fontsize=12,
     )
-    fig.savefig("legend_comparison.pdf")
-    fig.savefig("legend_comparison.png", dpi=150)
-    print("Wrote legend_comparison.pdf and legend_comparison.png")
+    pdf_path = resolve_output_path("legend_comparison.pdf")
+    png_path = resolve_output_path("legend_comparison.png")
+    fig.savefig(pdf_path)
+    fig.savefig(png_path, dpi=150)
+    print(f"Wrote {pdf_path} and {png_path}")
 
 
 if __name__ == "__main__":

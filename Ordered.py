@@ -5,7 +5,7 @@ import random
 import numpy as np
 import matplotlib
 
-from experiment_io import parse_flags, seed_all, save_figdata, load_figdata
+from experiment_io import parse_flags, seed_all, save_figdata, load_figdata, resolve_output_path
 
 _flags = parse_flags(sys.argv)
 seed_all(_flags["seed"])
@@ -80,7 +80,7 @@ def make_figure(data: dict, output_path: str | None) -> None:
 # In --replot mode, only the optional [output.pdf] positional is consulted.
 DISEASES = {"D3": D3, "D17": D17}
 if _flags["replot"]:
-    OUTPUT_FILE = sys.argv[1] if len(sys.argv) >= 2 else None
+    OUTPUT_FILE = resolve_output_path(sys.argv[1] if len(sys.argv) >= 2 else None)
     data, _meta = load_figdata(_flags["replot"])
     make_figure(data, OUTPUT_FILE)
     sys.exit(0)
@@ -89,7 +89,7 @@ if len(sys.argv) >= 3:
     DISEASE = DISEASES[sys.argv[1]]
     POOL_IDX = int(sys.argv[2])
     RANDOM_SAMPLE_SIZE = int(sys.argv[3]) if len(sys.argv) >= 4 and sys.argv[3] != "_" else None
-    OUTPUT_FILE = sys.argv[4] if len(sys.argv) >= 5 else None
+    OUTPUT_FILE = resolve_output_path(sys.argv[4] if len(sys.argv) >= 5 else None)
 else:
     DISEASE = D3
     POOL_IDX = 0

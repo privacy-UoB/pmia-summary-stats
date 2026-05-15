@@ -24,6 +24,7 @@ from scipy.spatial.distance import cdist
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"utils")
 
+from experiment_io import resolve_output_path
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 from utils import auc_scores, tpr_at_fpr
 
@@ -183,7 +184,7 @@ def run():
         })
 
     df_out = pd.DataFrame(rows)
-    df_out.to_csv("fig_nn_drift.csv", index=False)
+    df_out.to_csv(resolve_output_path("fig_nn_drift.csv"), index=False)
 
     print(f"\n{'Model':<25s} {'AUC LLR':>9s} {'AUC L1':>9s} "
           f"{'TPR LLR':>9s} {'TPR L1':>9s}")
@@ -218,7 +219,7 @@ def run():
         app_rows.append(app_row)
 
     df_app = pd.DataFrame(app_rows)
-    df_app.to_csv("fig_nn_drift_appendix.csv", index=False)
+    df_app.to_csv(resolve_output_path("fig_nn_drift_appendix.csv"), index=False)
 
     print(f"\nAppendix: NN k-sweep (Euclidean LLR shown; all metrics in CSV)")
     print(f"{'k':>4s} {'pctl':>6s} {'LLR':>8s} {'L1':>8s}")
@@ -248,6 +249,7 @@ def run():
     ]
 
     def _plot_k_sweep(score_suffix, score_label, ylabel, ylim, output_path):
+        output_path = resolve_output_path(output_path)
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
         nn_rows = df_app[df_app["k"] > 0]
         k_plot = nn_rows["k"].astype(int).values

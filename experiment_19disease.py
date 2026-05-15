@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 
 from sklearn.model_selection import ShuffleSplit
 
+from experiment_io import resolve_output_path
 from plot_style import LLR_COLOR, line_kwargs
 from utils import auc_scores, tpr_at_fpr
 from utils_datasets import (D1, D2, D3, D4, D5, D6, D7, D8, D9, D10,
@@ -250,7 +251,8 @@ def run_experiment(iterations=2000, seed=42):
         })
 
         # save incrementally so progress is preserved on interruption
-        pd.DataFrame(results).to_csv("results/19disease_results.csv", index=False)
+        pd.DataFrame(results).to_csv(
+            resolve_output_path("19disease_results.csv"), index=False)
         print(f"  Saved ({len(results)}/19)")
 
     return pd.DataFrame(results)
@@ -320,10 +322,12 @@ def _make_two_panel(df, case_col, random_col, metric_label, panel_ylim,
     ax.legend(fontsize=9, loc="lower right")
 
     plt.tight_layout()
-    fig.savefig(f"{output_basename}.pdf", dpi=300, bbox_inches="tight")
-    fig.savefig(f"{output_basename}.png", dpi=300, bbox_inches="tight")
+    pdf_path = resolve_output_path(f"{output_basename}.pdf")
+    png_path = resolve_output_path(f"{output_basename}.png")
+    fig.savefig(pdf_path, dpi=300, bbox_inches="tight")
+    fig.savefig(png_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
-    print(f"Saved {output_basename}.pdf and {output_basename}.png")
+    print(f"Saved {pdf_path} and {png_path}")
 
 
 def make_figure(csv_path="results/19disease_results.csv"):

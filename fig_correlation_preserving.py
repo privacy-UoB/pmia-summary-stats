@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"utils")
 
 from sklearn.metrics import roc_auc_score
+from experiment_io import resolve_output_path
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 from utils import auc_scores, LLR
 
@@ -434,7 +435,7 @@ def run():
         "corr_preserving_L1": avg_corr_L1,
         "corr_preserving_LLR": avg_corr_LLR,
     })
-    df.to_csv("fig_correlation_preserving.csv", index=False)
+    df.to_csv(resolve_output_path("fig_correlation_preserving.csv"), index=False)
     print(f"Saved fig_correlation_preserving.csv ({len(auc_real_L1)} iterations)")
 
     # Plot: 1x2 subplots (L1 left, LLR right)
@@ -457,7 +458,7 @@ def run():
     fig.legend(handles, labels, loc="lower center", ncol=2, fontsize=9,
                bbox_to_anchor=(0.5, -0.02))
     plt.tight_layout(rect=[0, 0.06, 1, 1])
-    fig.savefig("fig_correlation_preserving.pdf", dpi=300, bbox_inches="tight")
+    fig.savefig(resolve_output_path("fig_correlation_preserving.pdf"), dpi=300, bbox_inches="tight")
     print("Saved fig_correlation_preserving.pdf")
 
 

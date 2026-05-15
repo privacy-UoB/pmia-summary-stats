@@ -8,6 +8,7 @@ All sweep_noise calls are run in parallel via ProcessPoolExecutor.
 import numpy as np
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from experiment_io import resolve_output_path
 from utils_datasets import load_dataset, load_timestamp_dataset, drop_timestamp_index, D3, D17
 
 NUM_REPS = 2000
@@ -221,5 +222,6 @@ if __name__ == "__main__":
     print("\\end{table}")
 
     # CSV
-    pd.DataFrame(curve_rows).to_csv("threshold_results.csv", index=False)
-    print("\nSaved threshold_results.csv")
+    out_csv = resolve_output_path("threshold_results.csv")
+    pd.DataFrame(curve_rows).to_csv(out_csv, index=False)
+    print(f"\nSaved {out_csv}")

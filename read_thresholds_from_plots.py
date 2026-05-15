@@ -13,6 +13,16 @@ import tempfile
 from pathlib import Path
 from PIL import Image
 
+RESULTS_DIR = Path(__file__).resolve().parent / "results"
+
+
+def _resolve(pdf_name):
+    """Look for the PDF in results/ first, fall back to the cwd."""
+    candidate = RESULTS_DIR / pdf_name
+    if candidate.exists():
+        return candidate
+    return Path(pdf_name)
+
 
 def pdf_to_array(pdf_path, dpi=300):
     """Convert first page of PDF to numpy RGB array using pdftoppm."""
@@ -153,28 +163,31 @@ XRANGE_TIMESTAMP = (-1.179, 1.382)  # Timestamp (arange(0,20,0.1) on log)
 if __name__ == "__main__":
     results = []
 
-    for pdf, label in [
+    for pdf_name, label in [
         ("fig2a_D3_case.pdf", "D3 case"),
         ("fig2b_D3_random.pdf", "D3 random"),
         ("fig2ai_D17_case_dev.pdf", "D17 case"),
         ("fig2bi_D17_random_dev.pdf", "D17 random"),
     ]:
-        if Path(pdf).exists():
+        pdf = _resolve(pdf_name)
+        if pdf.exists():
             r = analyze_plot(pdf, label, x_range_log=XRANGE_CROSS,
                              l1_color=(0, 0, 255), llr_color=(255, 0, 0))
             if r:
                 results.append(r)
 
-    if Path("fig2c_Timestamp.pdf").exists():
-        r = analyze_plot("fig2c_Timestamp.pdf", "Timestamp",
+    ts_pdf = _resolve("fig2c_Timestamp.pdf")
+    if ts_pdf.exists():
+        r = analyze_plot(ts_pdf, "Timestamp",
                          x_range_log=XRANGE_TIMESTAMP,
                          l1_color=(31, 119, 180), llr_color=(255, 127, 14),
                          color_tolerance=40)
         if r:
             results.append(r)
 
-    if Path("fig2d_FitBit.pdf").exists():
-        r = analyze_plot("fig2d_FitBit.pdf", "FitBit",
+    fb_pdf = _resolve("fig2d_FitBit.pdf")
+    if fb_pdf.exists():
+        r = analyze_plot(fb_pdf, "FitBit",
                          x_range_log=XRANGE_CROSS,
                          l1_color=(31, 119, 180), llr_color=(255, 127, 14),
                          color_tolerance=40)

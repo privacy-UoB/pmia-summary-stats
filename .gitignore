@@ -26,3 +26,6 @@ D17_L1_case.csv
 D17_L1_random.csv
 D17_LLR_case.csv
 D17_LLR_random.csv
+
+# Generated experiment outputs (figures + npz/csv dumps)
+results/

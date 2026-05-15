@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 warnings.filterwarnings("ignore", category=RuntimeWarning,
                         module=r"utils")
 
+from experiment_io import resolve_output_path
 from plot_style import line_kwargs
 from utils import auc_scores, tpr_at_fpr
 from utils_datasets import D1, D3, D14
@@ -282,7 +283,8 @@ def run_experiment(iterations=2000):
                   f"ok={len(c_llr_me)}/{len(r_llr_me)}")
 
             # Save incrementally
-            pd.DataFrame(results).to_csv("results/nsweep_results.csv", index=False)
+            pd.DataFrame(results).to_csv(
+                resolve_output_path("nsweep_results.csv"), index=False)
 
     print(f"\nDone. Saved {len(results)} rows to nsweep_results.csv")
     return pd.DataFrame(results)
@@ -337,6 +339,7 @@ def _make_nsweep_figure(df, case_llr_col, case_l1_col, random_llr_col,
     fig.legend(handles, labels, loc="lower center", ncol=ncol, fontsize=9,
                bbox_to_anchor=(0.5, -0.02))
     plt.tight_layout(rect=[0, 0.06, 1, 1])
+    output_path = resolve_output_path(output_path)
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved {output_path}")

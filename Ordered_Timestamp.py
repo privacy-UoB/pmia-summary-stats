@@ -2,7 +2,7 @@ import sys
 import numpy as np
 import matplotlib
 
-from experiment_io import parse_flags, seed_all, save_figdata, load_figdata
+from experiment_io import parse_flags, seed_all, save_figdata, load_figdata, resolve_output_path
 
 _flags = parse_flags(sys.argv)
 seed_all(_flags["seed"])
@@ -92,7 +92,7 @@ def make_figure(data: dict, output_path: str | None) -> None:
 
 # CLI: python Ordered_Timestamp.py [selected_distribution] [output.pdf]
 selected_distribution = int(sys.argv[1]) if len(sys.argv) >= 2 else 0
-OUTPUT_FILE = sys.argv[2] if len(sys.argv) >= 3 else None
+OUTPUT_FILE = resolve_output_path(sys.argv[2] if len(sys.argv) >= 3 else None)
 
 if _flags["replot"]:
     data, _meta = load_figdata(_flags["replot"])

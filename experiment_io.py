@@ -29,6 +29,37 @@ from datetime import datetime, timezone
 import numpy as np
 
 DEFAULT_SEED = 42
+RESULTS_DIR = "results"
+
+
+def resolve_output_path(path: str | None) -> str | None:
+    """Bare filenames (no directory component) land in results/. Absolute
+    paths and paths that already include a directory are left untouched.
+    Creates results/ on demand."""
+    if path is None or path == "":
+        return path
+    if os.path.dirname(path):
+        return path
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    return os.path.join(RESULTS_DIR, path)
+
+
+def resolve_input_path(path: str) -> str:
+    """If `path` doesn't exist as given but exists under results/, return the
+    results/ version. Lets --replot fig2a_D3_case.pdf find results/fig2a_D3_case.npz."""
+    if os.path.exists(path):
+        return path
+    if not os.path.dirname(path):
+        candidate = os.path.join(RESULTS_DIR, path)
+        if os.path.exists(candidate):
+            return candidate
+        # also try resolving via the npz extension
+        base, ext = os.path.splitext(candidate)
+        if ext.lower() in (".pdf", ""):
+            npz_candidate = base + ".npz"
+            if os.path.exists(npz_candidate):
+                return candidate
+    return path
 
 
 def parse_flags(argv: list[str]) -> dict:
@@ -92,7 +123,9 @@ def _paths_for(output_pdf: str) -> tuple[str, str]:
 
 
 def save_figdata(output_pdf: str, data: dict, meta: dict | None = None) -> None:
-    """Write `<output>.npz` + `<output>.meta.json` next to output_pdf."""
+    """Write `<output>.npz` + `<output>.meta.json` next to output_pdf.
+    Bare filenames are written under results/."""
+    output_pdf = resolve_output_path(output_pdf)
     npz_path, meta_path = _paths_for(output_pdf)
 
     coerced = {k: _coerce_array(v) for k, v in data.items()}
@@ -113,7 +146,9 @@ def save_figdata(output_pdf: str, data: dict, meta: dict | None = None) -> None:
 
 
 def load_figdata(path: str) -> tuple[dict, dict]:
-    """Load a saved dump. `path` may be the .npz, the .pdf, or the basename."""
+    """Load a saved dump. `path` may be the .npz, the .pdf, or the basename.
+    Falls back to looking under results/ if the bare path doesn't exist."""
+    path = resolve_input_path(path)
     base, ext = os.path.splitext(path)
     if ext.lower() == ".npz":
         npz_path = path
@@ -121,6 +156,7 @@ def load_figdata(path: str) -> tuple[dict, dict]:
         npz_path = base + ".npz"
     else:
         npz_path = path
+    npz_path = resolve_input_path(npz_path)
 
     with np.load(npz_path, allow_pickle=True) as nz:
         data = {k: nz[k] for k in nz.files}

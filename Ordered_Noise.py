@@ -5,7 +5,7 @@ import random
 import numpy as np
 import matplotlib
 
-from experiment_io import parse_flags, seed_all, save_figdata, load_figdata
+from experiment_io import parse_flags, seed_all, save_figdata, load_figdata, resolve_output_path
 
 _flags = parse_flags(sys.argv)
 seed_all(_flags["seed"])
@@ -96,7 +96,7 @@ if len(sys.argv) >= 4:
     L1_or_LLR = sys.argv[2]
     POOL_IDX = int(sys.argv[3])
     RANDOM_SAMPLE_SIZE = int(sys.argv[4]) if len(sys.argv) >= 5 and sys.argv[4] != "_" else None
-    OUTPUT_FILE = sys.argv[5] if len(sys.argv) >= 6 else None
+    OUTPUT_FILE = resolve_output_path(sys.argv[5] if len(sys.argv) >= 6 else None)
 else:
     DISEASE = D3
     L1_or_LLR = "L1"

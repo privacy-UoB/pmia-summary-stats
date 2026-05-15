@@ -2,9 +2,11 @@ import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from experiment_io import resolve_output_path
 from utils_datasets import load_timestamp_dataset
 
-output_file = sys.argv[1] if len(sys.argv) > 1 else "fig_timepoint_drift.pdf"
+output_file = resolve_output_path(
+    sys.argv[1] if len(sys.argv) > 1 else "fig_timepoint_drift.pdf")
 
 # Load dataset — returns lists of 8 DataFrames (one per timepoint)
 pop, pool, _sample, _healthy = load_timestamp_dataset()

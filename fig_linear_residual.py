@@ -25,6 +25,7 @@ from scipy.spatial.distance import cdist
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"utils")
 
+from experiment_io import resolve_output_path
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 from utils import auc_scores, LLR, tpr_at_fpr
 
@@ -198,7 +199,7 @@ def run():
         rows.append(row)
 
     df_out = pd.DataFrame(rows)
-    df_out.to_csv("fig_linear_residual.csv", index=False)
+    df_out.to_csv(resolve_output_path("fig_linear_residual.csv"), index=False)
     print(f"\nSaved fig_linear_residual.csv")
     print(df_out.to_string(index=False))
 
@@ -214,6 +215,7 @@ def run():
     width = 0.35
 
     def _plot_panel(col_suffix, ylabel, ylim, output_path):
+        output_path = resolve_output_path(output_path)
         fig, (ax_llr, ax_l1) = plt.subplots(1, 2, figsize=(12, 5))
         for ax, metric, title in [(ax_llr, "LLR", "LLR"),
                                   (ax_l1, "L1", "L1")]:

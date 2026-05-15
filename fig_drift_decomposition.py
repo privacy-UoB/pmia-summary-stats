@@ -24,6 +24,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from sklearn.metrics import roc_auc_score
+from experiment_io import resolve_output_path
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 from utils import auc_scores
 
@@ -250,7 +251,7 @@ def run():
     df = pd.DataFrame({"timepoint": ts})
     for k in keys:
         df[k] = avg[k]
-    df.to_csv("fig_drift_decomposition.csv", index=False)
+    df.to_csv(resolve_output_path("fig_drift_decomposition.csv"), index=False)
     print(f"Saved fig_drift_decomposition.csv ({len(all_results)} iterations)")
 
     # Print key comparisons
@@ -282,7 +283,7 @@ def run():
     fig.legend(handles, labels, loc="lower center", ncol=4, fontsize=9,
                bbox_to_anchor=(0.5, -0.02))
     plt.tight_layout(rect=[0, 0.06, 1, 1])
-    fig.savefig("fig_drift_decomposition.pdf", dpi=300, bbox_inches="tight")
+    fig.savefig(resolve_output_path("fig_drift_decomposition.pdf"), dpi=300, bbox_inches="tight")
     print("Saved fig_drift_decomposition.pdf")
 
 
