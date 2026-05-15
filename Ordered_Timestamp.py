@@ -42,32 +42,32 @@ def make_figure(data: dict, output_path: str | None) -> None:
 
     # real curves are solid; synthetic-noise overlay (if present) is dashed.
     if not include_synthetic_noise:
-        ax_auc.plot(range(len(auc_L1)), auc_L1, label="AUC L1",
+        ax_auc.plot(range(len(auc_L1)), auc_L1, label="L1",
                     **line_kwargs("L1", marker=None, linewidth=2.0))
-        ax_auc.plot(range(len(auc_LLR)), auc_LLR, label="AUC LLR",
+        ax_auc.plot(range(len(auc_LLR)), auc_LLR, label="LLR",
                     **line_kwargs("LLR", marker=None, linewidth=2.0))
         if fixed_FPR:
-            ax_tpr.plot(range(len(auc_L1)), tpr_at_fpr_L1, label="TPR L1",
+            ax_tpr.plot(range(len(auc_L1)), tpr_at_fpr_L1, label="L1",
                         **line_kwargs("L1", marker=None, linewidth=2.0))
-            ax_tpr.plot(range(len(auc_LLR)), tpr_at_fpr_LLR, label="TPR LLR",
+            ax_tpr.plot(range(len(auc_LLR)), tpr_at_fpr_LLR, label="LLR",
                         **line_kwargs("LLR", marker=None, linewidth=2.0))
     else:
-        ax_auc.plot(range(len(auc_syntheticL1)), auc_L1[:6], label="AUC L1 real",
+        ax_auc.plot(range(len(auc_syntheticL1)), auc_L1[:6], label="L1 real",
                     **line_kwargs("L1", marker=None, linewidth=2.0))
-        ax_auc.plot(range(len(auc_syntheticLLR)), auc_LLR[:6], label="AUC LLR real",
+        ax_auc.plot(range(len(auc_syntheticLLR)), auc_LLR[:6], label="LLR real",
                     **line_kwargs("LLR", marker=None, linewidth=2.0))
-        ax_auc.plot(range(len(auc_syntheticL1)), auc_syntheticL1, label="AUC L1 synth",
+        ax_auc.plot(range(len(auc_syntheticL1)), auc_syntheticL1, label="L1 synth",
                     **line_kwargs("L1", marker=None, linewidth=2.0, linestyle="--"))
-        ax_auc.plot(range(len(auc_syntheticLLR)), auc_syntheticLLR, label="AUC LLR synth",
+        ax_auc.plot(range(len(auc_syntheticLLR)), auc_syntheticLLR, label="LLR synth",
                     **line_kwargs("LLR", marker=None, linewidth=2.0, linestyle="--"))
         if fixed_FPR:
-            ax_tpr.plot(range(len(fpr_syntheticL1)), tpr_at_fpr_L1[:6], label="TPR L1 real",
+            ax_tpr.plot(range(len(fpr_syntheticL1)), tpr_at_fpr_L1[:6], label="L1 real",
                         **line_kwargs("L1", marker=None, linewidth=2.0))
-            ax_tpr.plot(range(len(fpr_syntheticLLR)), tpr_at_fpr_LLR[:6], label="TPR LLR real",
+            ax_tpr.plot(range(len(fpr_syntheticLLR)), tpr_at_fpr_LLR[:6], label="LLR real",
                         **line_kwargs("LLR", marker=None, linewidth=2.0))
-            ax_tpr.plot(range(len(fpr_syntheticL1)), fpr_syntheticL1, label="TPR L1 synth",
+            ax_tpr.plot(range(len(fpr_syntheticL1)), fpr_syntheticL1, label="L1 synth",
                         **line_kwargs("L1", marker=None, linewidth=2.0, linestyle="--"))
-            ax_tpr.plot(range(len(fpr_syntheticLLR)), fpr_syntheticLLR, label="TPR LLR synth",
+            ax_tpr.plot(range(len(fpr_syntheticLLR)), fpr_syntheticLLR, label="LLR synth",
                         **line_kwargs("LLR", marker=None, linewidth=2.0, linestyle="--"))
 
     ax_auc.legend(loc='upper right')
@@ -77,7 +77,7 @@ def make_figure(data: dict, output_path: str | None) -> None:
     if fixed_FPR:
         ax_tpr.legend(loc='upper right')
         ax_tpr.set_xlabel("timestamp")
-        ax_tpr.set_ylabel("TPR at 0.01 FPR")
+        ax_tpr.set_ylabel("TPR @ 1% FPR")
         ax_tpr.set_ylim([0, 1])
         ax_tpr.grid(True)
     else:

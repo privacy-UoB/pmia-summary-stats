@@ -298,7 +298,7 @@ def run():
     )
     _plot_k_sweep(
         score_suffix="_tpr", score_label=("LLR", "L1"),
-        ylabel="TPR at 0.01 FPR", ylim=(0, 1),
+        ylabel="TPR @ 1% FPR", ylim=(0, 1),
         output_path="fig_nn_drift_tpr.pdf",
     )
 

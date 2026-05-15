@@ -209,7 +209,7 @@ if fixed_FPR == True:
 
     # Add combined legend to one axis
     ax1.legend(h1 + h2, l1 + l2, loc='upper right')
-    ax2.set_ylabel("TPR at 0.01 FPR")
+    ax2.set_ylabel("TPR @ 1% FPR")
 
 ax1.invert_xaxis()
 ax1.set_xlabel("number features")

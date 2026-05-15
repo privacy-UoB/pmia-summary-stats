@@ -75,7 +75,7 @@ def make_figure(data: dict, output_path: str | None) -> None:
     ax_auc.grid(True)
     if fixed_FPR:
         ax_tpr.set_xlabel("number miRNAs")
-        ax_tpr.set_ylabel("TPR at 0.01 FPR")
+        ax_tpr.set_ylabel("TPR @ 1% FPR")
         ax_tpr.set_ylim([0, 1])
         ax_tpr.grid(True)
     else:

@@ -399,10 +399,10 @@ OPTIONS = [
 
 
 LABELS_A = {
-    "L1_case":    "L1, case",
-    "L1_random":  "L1, random",
-    "LLR_case":   "LLR, case",
-    "LLR_random": "LLR, random",
+    "L1_case":    "Case L1",
+    "L1_random":  "Random L1",
+    "LLR_case":   "Case LLR",
+    "LLR_random": "Random LLR",
 }
 LABELS_B = {
     "auc_L1":  "AUC L1",

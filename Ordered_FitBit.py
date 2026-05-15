@@ -38,16 +38,16 @@ def make_figure(data: dict, output_path: str | None) -> None:
     if not error_bands:
         auc_L1 = np.average(auc_L1_raw, axis=0)
         auc_LLR = np.average(auc_LLR_raw, axis=0)
-        ax_auc.plot(range(iterations), auc_L1, label="AUC L1",
+        ax_auc.plot(range(iterations), auc_L1, label="L1",
                     **line_kwargs("L1", marker=None, linewidth=2.0))
-        ax_auc.plot(range(iterations), auc_LLR, label="AUC LLR",
+        ax_auc.plot(range(iterations), auc_LLR, label="LLR",
                     **line_kwargs("LLR", marker=None, linewidth=2.0))
         if fixed_FPR:
             tpr_at_fpr_L1 = np.average(tpr_L1_raw, axis=0)
             tpr_at_fpr_LLR = np.average(tpr_LLR_raw, axis=0)
-            ax_tpr.plot(range(iterations), tpr_at_fpr_L1, label="TPR L1",
+            ax_tpr.plot(range(iterations), tpr_at_fpr_L1, label="L1",
                         **line_kwargs("L1", marker=None, linewidth=2.0))
-            ax_tpr.plot(range(iterations), tpr_at_fpr_LLR, label="TPR LLR",
+            ax_tpr.plot(range(iterations), tpr_at_fpr_LLR, label="LLR",
                         **line_kwargs("LLR", marker=None, linewidth=2.0))
     else:
         auc_L1_eb = [np.average(auc_L1_raw, axis=0), np.min(auc_L1_raw, axis=0), np.max(auc_L1_raw, axis=0)]
@@ -79,7 +79,7 @@ def make_figure(data: dict, output_path: str | None) -> None:
     if fixed_FPR:
         ax_tpr.legend(loc='upper right')
         ax_tpr.set_xlabel("timestamp")
-        ax_tpr.set_ylabel("TPR at 0.01 FPR")
+        ax_tpr.set_ylabel("TPR @ 1% FPR")
         ax_tpr.set_ylim([0, 1])
         ax_tpr.grid(True)
     else:

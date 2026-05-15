@@ -9,7 +9,7 @@ Tests whether the destructive baseline-drift coupling lives in the
 per-individual regression slope or in the nonlinear residual.
 
 Produces fig_linear_residual.csv and fig_linear_residual.pdf (a 2×2
-panel: AUC on top, TPR@1% FPR on bottom; LLR / L1 across the columns).
+panel: AUC on top, TPR @ 1% FPR on bottom; LLR / L1 across the columns).
 """
 
 import contextlib
@@ -217,8 +217,8 @@ def run():
     output_path = resolve_output_path("fig_linear_residual.pdf")
     fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharex='col')
 
-    rows = [("",     "AUC",             (0.5, 1.0)),
-            ("_tpr", "TPR at 0.01 FPR", (0.0, 1.0))]
+    rows = [("",     "AUC",          (0.5, 1.0)),
+            ("_tpr", "TPR @ 1% FPR", (0.0, 1.0))]
     cols = [("LLR", 0), ("L1", 1)]
 
     for r, (col_suffix, ylabel, ylim) in enumerate(rows):

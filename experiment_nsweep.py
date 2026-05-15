@@ -368,7 +368,7 @@ def make_tpr_figure(csv_path="results/nsweep_results.csv"):
         df,
         case_llr_col="case_tpr_llr", case_l1_col="case_tpr_l1",
         random_llr_col="random_tpr_llr", random_l1_col="random_tpr_l1",
-        ylabel="TPR at 0.01 FPR", ylim=(0, 1),
+        ylabel="TPR @ 1% FPR", ylim=(0, 1),
         output_path="nsweep_tpr.pdf",
     )
 

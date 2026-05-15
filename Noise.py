@@ -41,16 +41,16 @@ def make_figure(data: dict, output_path: str | None) -> None:
     if not include_longitudinals:
         auc_L1 = np.asarray(data["auc_L1"])
         auc_LLR = np.asarray(data["auc_LLR"])
-        ax_auc.plot(multiplier, auc_L1, label="L1 AUC",
+        ax_auc.plot(multiplier, auc_L1, label="L1",
                     **line_kwargs("L1", marker=None, linewidth=2.0))
-        ax_auc.plot(multiplier, auc_LLR, label="LLR AUC",
+        ax_auc.plot(multiplier, auc_LLR, label="LLR",
                     **line_kwargs("LLR", marker=None, linewidth=2.0))
         if fixed_FPR:
             tpr_at_fpr_L1 = np.asarray(data["tpr_at_fpr_L1"])
             tpr_at_fpr_LLR = np.asarray(data["tpr_at_fpr_LLR"])
-            ax_tpr.plot(multiplier, tpr_at_fpr_L1, label="L1 TPR",
+            ax_tpr.plot(multiplier, tpr_at_fpr_L1, label="L1",
                         **line_kwargs("L1", marker=None, linewidth=2.0))
-            ax_tpr.plot(multiplier, tpr_at_fpr_LLR, label="LLR TPR",
+            ax_tpr.plot(multiplier, tpr_at_fpr_LLR, label="LLR",
                         **line_kwargs("LLR", marker=None, linewidth=2.0))
     else:
         noisy_longitudinals_L1 = [list(row) for row in np.asarray(data["noisy_longitudinals_L1"], dtype=object)]
@@ -69,11 +69,11 @@ def make_figure(data: dict, output_path: str | None) -> None:
                       [np.min(j) for j in transposed_LLR],
                       [np.max(k) for k in transposed_LLR]]
 
-            ax_auc.plot(multiplier, mm_L1[0], label="L1 AUC",
+            ax_auc.plot(multiplier, mm_L1[0], label="L1",
                         **line_kwargs("L1", marker=None, linewidth=2.0))
             ax_auc.fill_between(multiplier, mm_L1[1], mm_L1[2],
                                 alpha=0.2, color=METRIC_COLOR["L1"])
-            ax_auc.plot(multiplier, mm_LLR[0], label="LLR AUC",
+            ax_auc.plot(multiplier, mm_LLR[0], label="LLR",
                         **line_kwargs("LLR", marker=None, linewidth=2.0))
             ax_auc.fill_between(multiplier, mm_LLR[1], mm_LLR[2],
                                 alpha=0.2, color=METRIC_COLOR["LLR"])
@@ -87,11 +87,11 @@ def make_figure(data: dict, output_path: str | None) -> None:
                 mm_tpr_LLR = [[np.average(i) for i in tt_LLR],
                               [np.min(j) for j in tt_LLR],
                               [np.max(k) for k in tt_LLR]]
-                ax_tpr.plot(multiplier, mm_tpr_L1[0], label="L1 TPR",
+                ax_tpr.plot(multiplier, mm_tpr_L1[0], label="L1",
                             **line_kwargs("L1", marker=None, linewidth=2.0))
                 ax_tpr.fill_between(multiplier, mm_tpr_L1[1], mm_tpr_L1[2],
                                     alpha=0.2, color=METRIC_COLOR["L1"])
-                ax_tpr.plot(multiplier, mm_tpr_LLR[0], label="LLR TPR",
+                ax_tpr.plot(multiplier, mm_tpr_LLR[0], label="LLR",
                             **line_kwargs("LLR", marker=None, linewidth=2.0))
                 ax_tpr.fill_between(multiplier, mm_tpr_LLR[1], mm_tpr_LLR[2],
                                     alpha=0.2, color=METRIC_COLOR["LLR"])
@@ -99,19 +99,19 @@ def make_figure(data: dict, output_path: str | None) -> None:
             for l in range(iterations):
                 if L1_or_LLR == "L1":
                     ax_auc.plot(multiplier, noisy_longitudinals_L1[l],
-                                label=f"L1 AUC timestamp {l}",
+                                label=f"timestamp {l}",
                                 **line_kwargs("L1", marker=None, linewidth=2.0))
                     if fixed_FPR:
                         ax_tpr.plot(multiplier, noisy_longitudinals_tpr_L1[l],
-                                    label=f"L1 TPR timestamp {l}",
+                                    label=f"timestamp {l}",
                                     **line_kwargs("L1", marker=None, linewidth=2.0))
                 elif L1_or_LLR == "LLR":
                     ax_auc.plot(multiplier, noisy_longitudinals_LLR[l],
-                                label=f"LLR AUC timestamp {l}",
+                                label=f"timestamp {l}",
                                 **line_kwargs("LLR", marker=None, linewidth=2.0))
                     if fixed_FPR:
                         ax_tpr.plot(multiplier, noisy_longitudinals_tpr_LLR[l],
-                                    label=f"LLR TPR timestamp {l}",
+                                    label=f"timestamp {l}",
                                     **line_kwargs("LLR", marker=None, linewidth=2.0))
 
     ax_auc.legend(loc='upper right')
@@ -123,7 +123,7 @@ def make_figure(data: dict, output_path: str | None) -> None:
         ax_tpr.legend(loc='upper right')
         ax_tpr.set_xscale("log")
         ax_tpr.set_xlabel("noise scale")
-        ax_tpr.set_ylabel("TPR at 0.01 FPR")
+        ax_tpr.set_ylabel("TPR @ 1% FPR")
         ax_tpr.set_ylim([0, 1])
         ax_tpr.grid(True)
     else:
