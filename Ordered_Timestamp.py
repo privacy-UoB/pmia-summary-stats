@@ -90,9 +90,17 @@ def make_figure(data: dict, output_path: str | None) -> None:
         plt.show()
 
 
-# CLI: python Ordered_Timestamp.py [selected_distribution] [output.pdf]
+# CLI: python Ordered_Timestamp.py [selected_distribution] [output.pdf] [stratify_mode]
+#   stratify_mode in {"off" (default), "diseased", "non_diseased"}
+#     off          : original all-miRNAs path
+#     diseased     : only D2-related miRNAs (Fig 13a)
+#     non_diseased : same-size random sample of non-D2-related miRNAs (Fig 13b)
 selected_distribution = int(sys.argv[1]) if len(sys.argv) >= 2 else 0
 OUTPUT_FILE = resolve_output_path(sys.argv[2] if len(sys.argv) >= 3 else None)
+_VALID_STRATIFY_MODES = ("off", "diseased", "non_diseased")
+stratify_mode = sys.argv[3] if len(sys.argv) >= 4 and sys.argv[3] != "_" else "off"
+if stratify_mode not in _VALID_STRATIFY_MODES:
+    raise ValueError(f"stratify_mode must be one of {_VALID_STRATIFY_MODES}, got {stratify_mode!r}")
 
 if _flags["replot"]:
     data, _meta = load_figdata(_flags["replot"])
@@ -102,7 +110,7 @@ if _flags["replot"]:
 include_synthetic_noise = True
 include_pvalue_histogram = False
 include_tabulate = False
-stratifying = False
+stratifying = stratify_mode != "off"
 fixed_FPR = True
 # 0 = fixed Gaussian
 # 1 = shifted Gaussian
@@ -183,25 +191,31 @@ for j in range (num_orders):
             fprs_syntheticLLR = []
 
     # re-randomise pop/pool split each iteration; CSV parse is reused from above
-    if stratifying == False:
+    if stratify_mode == "off":
         ti_pop, ti_pool, _sample_t, _healthy_t = _split_timestamp(_prepared_timestamp)
         ti_pop, ti_pool = drop_timestamp_index(ti_pop, ti_pool)
 
     else:
         # lung disease miRNAs only/excluded in longitudinal pop & pool
         only_pops, without_pops, only_pools, without_pools = separate_diseased_miRNAs(D2, "timestamp", with_independent_features=True)
-        ti_pop = without_pops
-        ti_pool = without_pools
 
-        miRNAs = list(ti_pop[0].keys())
-        current_miRNA_list = random.sample(miRNAs, len(only_pops[0].columns))
+        if stratify_mode == "diseased":
+            ti_pop = only_pops
+            ti_pool = only_pools
 
-        for index, (t_pop, t_pool) in enumerate(zip(ti_pop, ti_pool)):
-            t_pop = t_pop[t_pop.columns.intersection(current_miRNA_list)]
-            t_pool = t_pool[t_pool.columns.intersection(current_miRNA_list)]
+        else:  # non_diseased: same-size random sample of non-D2-related miRNAs
+            ti_pop = without_pops
+            ti_pool = without_pools
 
-            ti_pop[index] = t_pop
-            ti_pool[index] = t_pool
+            miRNAs = list(ti_pop[0].keys())
+            current_miRNA_list = random.sample(miRNAs, len(only_pops[0].columns))
+
+            for index, (t_pop, t_pool) in enumerate(zip(ti_pop, ti_pool)):
+                t_pop = t_pop[t_pop.columns.intersection(current_miRNA_list)]
+                t_pool = t_pool[t_pool.columns.intersection(current_miRNA_list)]
+
+                ti_pop[index] = t_pop
+                ti_pool[index] = t_pool
 
     # configuring the reference pop & pool to match the dataframe of a particular timepoint
     pop = ti_pop[0]
@@ -604,6 +618,7 @@ meta = {
     "include_synthetic_noise": include_synthetic_noise,
     "fixed_FPR": fixed_FPR,
     "stratifying": stratifying,
+    "stratify_mode": stratify_mode,
 }
 
 if OUTPUT_FILE:
