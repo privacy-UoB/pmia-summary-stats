@@ -8,7 +8,8 @@ independently using the k=1 nearest neighbor.
 Tests whether the destructive baseline-drift coupling lives in the
 per-individual regression slope or in the nonlinear residual.
 
-Produces fig_linear_residual.csv and fig_linear_residual.pdf.
+Produces fig_linear_residual.csv and fig_linear_residual.pdf (a 2×2
+panel: AUC on top, TPR@1% FPR on bottom; LLR / L1 across the columns).
 """
 
 import contextlib
@@ -203,10 +204,9 @@ def run():
     print(f"\nSaved fig_linear_residual.csv")
     print(df_out.to_string(index=False))
 
-    # ---- Plot: 1×2 grouped bar chart (AUC + TPR variants) ----
+    # ---- Plot: 2×2 grid (rows: AUC / TPR, cols: LLR / L1) ----
     _setup_rc()
 
-    # Helper to look up a value from df_out
     def _val(cond, metric_col):
         return df_out.loc[df_out["condition"] == cond, metric_col].values[0]
 
@@ -214,11 +214,16 @@ def run():
     x = np.arange(len(group_labels))
     width = 0.35
 
-    def _plot_panel(col_suffix, ylabel, ylim, output_path):
-        output_path = resolve_output_path(output_path)
-        fig, (ax_llr, ax_l1) = plt.subplots(1, 2, figsize=(12, 5))
-        for ax, metric, title in [(ax_llr, "LLR", "LLR"),
-                                  (ax_l1, "L1", "L1")]:
+    output_path = resolve_output_path("fig_linear_residual.pdf")
+    fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharex='col')
+
+    rows = [("",     "AUC",             (0.5, 1.0)),
+            ("_tpr", "TPR at 0.01 FPR", (0.0, 1.0))]
+    cols = [("LLR", 0), ("L1", 1)]
+
+    for r, (col_suffix, ylabel, ylim) in enumerate(rows):
+        for metric, c in cols:
+            ax = axes[r, c]
             col = f"t1_{metric}{col_suffix}"
             self_lin = [_val("self_self", col), _val("self_nn", col)]
             nn_lin = [_val("nn_self", col), _val("nn_nn", col)]
@@ -236,23 +241,20 @@ def run():
 
             ax.set_xticks(x)
             ax.set_xticklabels(group_labels)
-            ax.set_ylabel(ylabel)
             ax.set_ylim(*ylim)
-            ax.set_title(title)
             ax.grid(True, alpha=0.3, axis="y")
+            if r == 0:
+                ax.set_title(metric)
+            if c == 0:
+                ax.set_ylabel(ylabel)
 
-        handles, labels = ax_llr.get_legend_handles_labels()
-        fig.legend(handles, labels, loc="lower center", ncol=2, fontsize=9,
-                   bbox_to_anchor=(0.5, -0.02))
-        plt.tight_layout(rect=[0, 0.06, 1, 1])
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
-        plt.close(fig)
-        print(f"Saved {output_path}")
-
-    _plot_panel(col_suffix="", ylabel="AUC", ylim=(0.5, 1),
-                output_path="fig_linear_residual.pdf")
-    _plot_panel(col_suffix="_tpr", ylabel="TPR at 0.01 FPR", ylim=(0, 1),
-                output_path="fig_linear_residual_tpr.pdf")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=2, fontsize=9,
+               bbox_to_anchor=(0.5, -0.02))
+    plt.tight_layout(rect=[0, 0.04, 1, 1])
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved {output_path}")
 
 
 if __name__ == "__main__":
