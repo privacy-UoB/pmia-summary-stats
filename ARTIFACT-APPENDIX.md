@@ -33,9 +33,9 @@ an artifact reviewer). -->
    year, or even a BibTex cite).
 2. A short description of your artifact and how it is relevant to your paper. -->
 
-Revisiting Assumptions for Membership Inference on Summary Statistics
-P. Berrang, M. Ryan, K. Wooldridge
-2026
+- **Paper:** *Revisiting Assumptions for Membership Inference on Summary Statistics*
+- **Authors:** P. Berrang, M. Ryan, K. Wooldridge
+- **Year:** 2026
 
 This artifact contains the datasets and code required for all plots in the
 above paper. The two miRNA datasets used were downloaded from the Gene 
@@ -92,10 +92,11 @@ here but rather in the corresponding submission field on HotCRP. -->
 Can run on a laptop (no special hardware requirements).
 
 Hardware specifications when performing experiments for the corresponding paper:
-MacBook Air (M1)
-8-core GPU
-8GB Memory
-256GB Storage
+
+- MacBook Air (M1)
+- 8-core GPU
+- 8 GB memory
+- 256 GB storage
 
 ### Software Requirements
 
@@ -154,11 +155,12 @@ Exact pinned versions are in `uv.lock`.
 Machine Learning Models required: none.
 
 Datasets required (all bundled under `Datasets/` — nothing to download):
-`GSE61741_series_matrix.csv` (cross-sectional miRNA dataset)
-`independent_90.csv` (our list of cross-sectional miRNAs with 90% independence)
-`GSE68951_series_matrix.txt` (longitudinal miRNA dataset)
-`dailyActivity_merged.csv` (FitBit dataset)
-`Diseased_miRNAs.txt` (our list of up/down regulated diseased miRNAs)
+
+- `GSE61741_series_matrix.csv` (cross-sectional miRNA dataset)
+- `independent_90.csv` (our list of cross-sectional miRNAs with 90% independence)
+- `GSE68951_series_matrix.txt` (longitudinal miRNA dataset)
+- `dailyActivity_merged.csv` (FitBit dataset)
+- `Diseased_miRNAs.txt` (our list of up/down regulated diseased miRNAs)
 
 ### Estimated Time and Storage Consumption
 
@@ -492,14 +494,14 @@ The following gives the general command needed for all four plots in Figure 2:
 uv run python Noise.py <dataset> <include_deviations> <disease> <pop_idx> <pool_idx> [random_sample_size] [output.pdf]
 ```
 
-To produce "Figure 2a", <disease> is D3.
-To produce "Figure 2b", <pop_idx> and <pool_idx> is 0.
-To produce "Figure 2c", <dataset> is "Timestamp".
-To produce "Figure 2d", <dataset> is "FitBit".
+- For **Figure 2a**, `<disease>` is `D3`.
+- For **Figure 2b**, `<pop_idx>` and `<pool_idx>` are `0`.
+- For **Figure 2c**, `<dataset>` is `Timestamp`.
+- For **Figure 2d**, `<dataset>` is `FitBit`.
 
 The concrete invocations are wired up in `run_noise_experiments.sh`; for
 example Figure 2a is `uv run python Noise.py miRNA true D3 1 1 _ fig2a_D3_case.pdf`.
-The script averages over 2000 iterations and saves the pdf to <output>.
+The script averages over 2000 iterations and saves the pdf to `<output>`.
 
 The noise- and crossover-threshold table (**Table 2**, "Summary of noise and
 crossover thresholds") is generated directly — it does not need to be read off
@@ -526,13 +528,13 @@ The following is the general command needed for both plots in Figure 3:
 uv run python Ordered.py <disease> <pool_idx> [random_sample_size] [output.pdf] [stratify]
 ```
 
-To produce "Figure 3a" (D3 case pool), <pool_idx> is 1:
-`uv run python Ordered.py D3 1 _ fig3a_D3_case.pdf`.
-To produce "Figure 3b" (D3 random pool), <pool_idx> is 0:
-`uv run python Ordered.py D3 0 _ fig3b_D3_random.pdf`.
+- For **Figure 3a** (D3 case pool), `<pool_idx>` is `1`:
+  `uv run python Ordered.py D3 1 _ fig3a_D3_case.pdf`.
+- For **Figure 3b** (D3 random pool), `<pool_idx>` is `0`:
+  `uv run python Ordered.py D3 0 _ fig3b_D3_random.pdf`.
 
 This averages over 5000 random orderings (and, for the random pool, 20 pool
-draws) and saves the pdf to <output>. Both invocations are also wired up in
+draws) and saves the pdf to `<output>`. Both invocations are also wired up in
 `run_ordered_experiments.sh`.
 
 #### Experiment 4: MIA on Longitudinal Data
@@ -599,14 +601,14 @@ The following is the general command line needed for all plots in Figure 7:
 uv run python Ordered.py <disease> <pool_idx> [random_sample_size] [output.pdf] [stratify]
 ```
 
-To produce "Figure 7a", <disease> is D1, <pool_idx> is 1, 
-    [random_sample_size] is 124, [stratify] is "stratified"
-To produce "Figure 7b", <disease> is D17, <pool_idx> is 1, 
-    [random_sample_size] is 20, [stratify] is "stratified"
-To produce "Figure 7c", <disease> is D14, <pool_idx> is 1, 
-    [random_sample_size] is 24, [stratify] is "stratified"
+- For **Figure 7a**, `<disease>` is `D1`, `<pool_idx>` is `1`,
+  `[random_sample_size]` is `124`, `[stratify]` is `stratified`.
+- For **Figure 7b**, `<disease>` is `D17`, `<pool_idx>` is `1`,
+  `[random_sample_size]` is `20`, `[stratify]` is `stratified`.
+- For **Figure 7c**, `<disease>` is `D14`, `<pool_idx>` is `1`,
+  `[random_sample_size]` is `24`, `[stratify]` is `stratified`.
 
-This averages over 5000 iterations and saves the pdf to <output>. All three
+This averages over 5000 iterations and saves the pdf to `<output>`. All three
 invocations are wired up in `run_fig7_fig13_experiments.sh`.
 
 #### Experiment 8: Attempts at replicating real drift
