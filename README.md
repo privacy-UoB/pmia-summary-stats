@@ -3,6 +3,10 @@
 Code and datasets for the paper *"Revisiting Assumptions for Membership
 Inference on Summary Statistics"* (P. Berrang, M. Ryan, K. Wooldridge, 2026).
 
+> **Artifact reviewers:** the full PETs Artifact Appendix — requirements, setup
+> (Docker and native), environment tests, and per-experiment reproduction steps
+> — is in **[ARTIFACT-APPENDIX.md](ARTIFACT-APPENDIX.md)**.
+
 ## Background
 
 MicroRNA expressions are real-valued numbers representing how active an RNA
@@ -55,7 +59,9 @@ saves a `.npz` + `.meta.json` (git commit + argv) next to each PDF; pass
 `--replot <pdf|npz>` (or `--plot-only` for the `fig_*`/`experiment_*` scripts)
 to regenerate a figure from saved data without recomputing.
 
-See `ARTIFACT-APPENDIX.md` for the full artifact-evaluation walkthrough.
+See **[ARTIFACT-APPENDIX.md](ARTIFACT-APPENDIX.md)** for the full
+artifact-evaluation walkthrough (requirements, setup, tests, and the
+per-experiment reproduction steps).
 
 ## Datasets
 
