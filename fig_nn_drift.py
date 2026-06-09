@@ -10,6 +10,7 @@ Tests four conditions against real biological drift at t=1:
 Produces fig_nn_drift.csv.
 """
 
+import argparse
 import contextlib
 import io
 import multiprocessing as mp
@@ -24,7 +25,7 @@ from scipy.spatial.distance import cdist
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"utils")
 
-from experiment_io import resolve_output_path
+from experiment_io import resolve_input_path, resolve_output_path
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 from utils import auc_scores, tpr_at_fpr
 
@@ -149,7 +150,7 @@ def _one_iteration(seed):
     return results
 
 
-def run():
+def _compute():
     print(f"Running {NUM_ITERATIONS} iterations across {NUM_WORKERS} workers...",
           flush=True)
 
@@ -228,7 +229,10 @@ def run():
         print(f"{int(row['k']):4d} {row['pctl']:5.0f}% {row['euclidean_llr']:8.3f} {row['euclidean_l1']:8.3f}")
 
     print(f"\nSaved fig_nn_drift.csv and fig_nn_drift_appendix.csv")
+    return df_out, df_app
 
+
+def _plot(df_out, df_app):
     # ---- Appendix plot: k-sweep with reference lines ----
     plt.rcParams.update({
         "font.family": "serif",
@@ -241,12 +245,18 @@ def run():
     metric_labels = {"euclidean": "Euclidean", "cosine": "Cosine",
                      "correlation": "Correlation"}
 
-    # Reference line values from main table
+    # Reference line values are sourced from the main summary table (df_out)
+    # so the plot block can run from CSV alone in --plot-only mode.
     ref_lines = [
         ("real",          "Real drift",           "k",  "--", 2.0),
         ("indep_gauss",   "Independent Gaussian",  "C4", ":",  2.0),
         ("loo_cond_mean", "LOO conditional mean",  "C5", "-.", 2.0),
     ]
+    _MODEL_LABEL = {
+        "real": "Real drift",
+        "indep_gauss": "Independent Gaussian",
+        "loo_cond_mean": "LOO conditional mean",
+    }
 
     def _plot_k_sweep(score_suffix, score_label, ylabel, ylim, output_path):
         output_path = resolve_output_path(output_path)
@@ -255,10 +265,13 @@ def run():
         k_plot = nn_rows["k"].astype(int).values
         pctl_vals = nn_rows["pctl"].values
 
-        ref_vals = {
-            key: {s: df_all[f"{key}_{s}{score_suffix}"].mean() for s in ["llr", "l1"]}
-            for key, _, _, _, _ in ref_lines
-        }
+        # df_out columns are "llr","l1" for AUC and "llr_tpr","l1_tpr" for TPR.
+        col_suffix = "_tpr" if score_suffix == "_tpr" else ""
+        ref_vals = {}
+        for key, _, _, _, _ in ref_lines:
+            row = df_out[df_out["model"] == _MODEL_LABEL[key]].iloc[0]
+            ref_vals[key] = {"llr": row[f"llr{col_suffix}"],
+                             "l1": row[f"l1{col_suffix}"]}
 
         for ax, score, label in zip(axes, ["llr", "l1"], score_label):
             for metric in NN_METRICS:
@@ -304,4 +317,17 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser(
+        description="Drift model comparison experiment")
+    parser.add_argument("--plot-only", action="store_true",
+                        help="Skip computation; replot from existing fig_nn_drift.csv "
+                             "and fig_nn_drift_appendix.csv")
+    args = parser.parse_args()
+    if args.plot_only:
+        df_out = pd.read_csv(resolve_input_path("fig_nn_drift.csv"))
+        df_app = pd.read_csv(resolve_input_path("fig_nn_drift_appendix.csv"))
+        print(f"Loaded fig_nn_drift.csv and fig_nn_drift_appendix.csv")
+        _plot(df_out, df_app)
+    else:
+        df_out, df_app = _compute()
+        _plot(df_out, df_app)

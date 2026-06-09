@@ -29,6 +29,9 @@ def make_figure(data: dict, output_path: str | None) -> None:
     num_miRNAs = list(np.asarray(data["num_miRNAs"]))
     fixed_FPR = bool(np.asarray(data["_fixed_FPR"]).item())
     L1_or_LLR = str(np.asarray(data["_L1_or_LLR"]).item())
+    pool_idx = int(np.asarray(data["_pool_idx"]).item())
+    # Unified convention: random pool = dashed, case pool = solid.
+    linestyle = "--" if pool_idx == 0 else "-"
 
     if fixed_FPR:
         fig, ax_auc, ax_tpr = stacked_auc_tpr()
@@ -53,19 +56,19 @@ def make_figure(data: dict, output_path: str | None) -> None:
         c = palette[index]
         if L1_or_LLR == "L1":
             ax_auc.plot(num_miRNAs, noise_fraction_L1[index],
-                        color=c, linewidth=2.0,
+                        color=c, linewidth=2.0, linestyle=linestyle,
                         label=rf"$\alpha = {noise}$")
             if fixed_FPR:
                 ax_tpr.plot(num_miRNAs, noise_fraction_tpr_at_fpr_L1[index],
-                            color=c, linewidth=2.0,
+                            color=c, linewidth=2.0, linestyle=linestyle,
                             label=rf"$\alpha = {noise}$")
         elif L1_or_LLR == "LLR":
             ax_auc.plot(num_miRNAs, noise_fraction_LLR[index],
-                        color=c, linewidth=2.0,
+                        color=c, linewidth=2.0, linestyle=linestyle,
                         label=rf"$\alpha = {noise}$")
             if fixed_FPR:
                 ax_tpr.plot(num_miRNAs, noise_fraction_tpr_at_fpr_LLR[index],
-                            color=c, linewidth=2.0,
+                            color=c, linewidth=2.0, linestyle=linestyle,
                             label=rf"$\alpha = {noise}$")
 
     ax_auc.invert_xaxis()
@@ -106,6 +109,10 @@ else:
 
 if _flags["replot"]:
     data, _meta = load_figdata(_flags["replot"])
+    # Back-compat: older .npz files don't carry _pool_idx in `data`; recover
+    # from the sidecar meta so the linestyle convention is honored on replot.
+    if "_pool_idx" not in data:
+        data["_pool_idx"] = _meta.get("pool_idx", 0)
     make_figure(data, OUTPUT_FILE)
     sys.exit(0)
 
@@ -188,6 +195,7 @@ data = {
     "num_miRNAs": np.asarray(num_miRNAs),
     "_fixed_FPR": fixed_FPR,
     "_L1_or_LLR": L1_or_LLR,
+    "_pool_idx": POOL_IDX,
 }
 if L1_or_LLR == "L1":
     data["noise_fraction_L1"] = mean_auc

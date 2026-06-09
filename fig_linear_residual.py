@@ -12,6 +12,7 @@ Produces fig_linear_residual.csv and fig_linear_residual.pdf (a 2×2
 panel: AUC on top, TPR @ 1% FPR on bottom; LLR / L1 across the columns).
 """
 
+import argparse
 import contextlib
 import io
 import multiprocessing as mp
@@ -26,7 +27,7 @@ from scipy.spatial.distance import cdist
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"utils")
 
-from experiment_io import resolve_output_path
+from experiment_io import resolve_input_path, resolve_output_path
 from utils_datasets import load_timestamp_dataset, drop_timestamp_index
 from utils import auc_scores, LLR, tpr_at_fpr
 
@@ -169,7 +170,7 @@ def _setup_rc():
     })
 
 
-def run():
+def _compute():
     print(f"Running {NUM_ITERATIONS} iterations across {NUM_WORKERS} workers...",
           flush=True)
 
@@ -203,7 +204,10 @@ def run():
     df_out.to_csv(resolve_output_path("fig_linear_residual.csv"), index=False)
     print(f"\nSaved fig_linear_residual.csv")
     print(df_out.to_string(index=False))
+    return df_out
 
+
+def _plot(df_out):
     # ---- Plot: 2×2 grid (rows: AUC / TPR, cols: LLR / L1) ----
     _setup_rc()
 
@@ -258,4 +262,16 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser(
+        description="Linear/residual drift factorial experiment")
+    parser.add_argument("--plot-only", action="store_true",
+                        help="Skip computation; replot from existing fig_linear_residual.csv")
+    args = parser.parse_args()
+    if args.plot_only:
+        csv_path = resolve_input_path("fig_linear_residual.csv")
+        df_out = pd.read_csv(csv_path)
+        print(f"Loaded {csv_path}")
+        _plot(df_out)
+    else:
+        df_out = _compute()
+        _plot(df_out)

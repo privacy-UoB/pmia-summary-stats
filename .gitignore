@@ -29,3 +29,9 @@ D17_LLR_random.csv
 
 # Generated experiment outputs (figures + npz/csv dumps)
 results/
+old_results/
+results.tar.gz
+
+# Local tooling / agent files (not part of the artifact)
+.claude/
+CLAUDE.md
