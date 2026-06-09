@@ -1,0 +1,15 @@
+# Keep the build context (and image) lean and deterministic.
+.git
+.venv
+results/
+old_results/
+results.tar.gz
+runs/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.claude/
+CLAUDE.md
+ARTIFACT-APPENDIX-updated-by-student.md
