@@ -34,7 +34,12 @@ underlying data are written to `results/` (created on demand).
 ## Reproducing the figures
 
 The `run_*.sh` scripts are the authoritative way to regenerate each figure;
-they call `uv run python` and run experiments in parallel where possible:
+they call `uv run python` and run experiments in parallel where possible.
+
+> **Note:** these scripts use bash associative arrays and require **bash ≥ 4.0**.
+> macOS ships bash 3.2 by default, so either install a newer bash
+> (`brew install bash`) or run the underlying `uv run python …` commands
+> directly. The Docker image already includes a recent bash.
 
 | Script                          | Figures                                  |
 |---------------------------------|------------------------------------------|

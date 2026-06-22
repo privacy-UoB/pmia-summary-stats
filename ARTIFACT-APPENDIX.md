@@ -149,6 +149,12 @@ instead use `uv` directly.
 Programming language interpreter: Python >=3.11, <3.14 (installed automatically
 by `uv`, or baked into the Docker image, from the pin in `pyproject.toml`).
 
+Shell (native runs only): the `run_*.sh` helper scripts use bash associative
+arrays and require bash >= 4.0. macOS ships bash 3.2 by default, so either
+install a newer bash (`brew install bash`) or run the underlying
+`uv run python ...` commands directly. The Docker image (Debian) already
+includes a recent bash, so Docker users are unaffected.
+
 Packages depended on: numpy, scipy, matplotlib, pandas, scikit-learn, ipython.
 Exact pinned versions are in `uv.lock`.
 

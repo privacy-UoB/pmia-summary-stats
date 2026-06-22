@@ -31,7 +31,7 @@ D20 = "disease: normal"
 def load_miRNA_dataset(MiRNA_filter=None, random_sample=None, case_sample=None):
 
     # columns are individuals, rows are miRNAs
-    df = pd.read_csv('Datasets/GSE61741_series_matrix.csv', skiprows=52, skipfooter=1, sep='\t', index_col=0)
+    df = pd.read_csv('Datasets/GSE61741_series_matrix.csv', skiprows=52, skipfooter=1, sep='\t', index_col=0, engine='python')
 
     # common to filter out miRNAs with median below 50
     df_median = df.median(axis=1)
@@ -158,7 +158,7 @@ def _prepare_timestamp_data(with_independent_miRNAs=False, withNaN=False, MiRNA_
     per iteration without re-parsing the source matrix.
     """
     # columns are 215 individuals, rows are 1026 (1205?) miRNAs
-    df = pd.read_csv('Datasets/GSE68951_series_matrix.txt', skiprows=58, skipfooter=1, sep='\t', index_col=0)
+    df = pd.read_csv('Datasets/GSE68951_series_matrix.txt', skiprows=58, skipfooter=1, sep='\t', index_col=0, engine='python')
 
     population = df.transpose()
 
@@ -564,11 +564,11 @@ def load_electricity_dataset():
 
 def load_psid_dataset():
 
-    labels1 = pd.read_csv('Datasets/J350695_labels.txt', sep='    ', skiprows=3, skipfooter=1)
+    labels1 = pd.read_csv('Datasets/J350695_labels.txt', sep='    ', skiprows=3, skipfooter=1, engine='python')
     labels1 = labels1.iloc[1:5606]
     labels1_map = dict(zip(labels1["Variable"], labels1["Labels"]))
 
-    labels2 = pd.read_csv('Datasets/J350694_labels.txt', sep='    ', skiprows=3, skipfooter=1)
+    labels2 = pd.read_csv('Datasets/J350694_labels.txt', sep='    ', skiprows=3, skipfooter=1, engine='python')
     labels2 = labels2.iloc[1:]
     labels2_map = dict(zip(labels2["Variable"], labels2["Labels"]))
 

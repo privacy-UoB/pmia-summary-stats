@@ -68,10 +68,14 @@ def LLR(
     sigma = np.std(population, axis=0, ddof=0)
     sigma_hat = np.std(pool, axis=0, ddof=0)
 
-    population_difference = np.divide(np.square(X_victim - mu),2*var)
-    pool_difference = np.divide(np.square(X_victim - mu_hat),2*var_hat)
+    # A pooled feature with zero variance (var_hat/sigma_hat == 0) yields
+    # divide-by-zero / invalid-value warnings here; the resulting inf/nan are
+    # expected and handled downstream, so suppress only the warning at source.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        population_difference = np.divide(np.square(X_victim - mu),2*var)
+        pool_difference = np.divide(np.square(X_victim - mu_hat),2*var_hat)
 
-    simplified_expression = population_difference - pool_difference + np.log(np.divide(sigma,sigma_hat))
+        simplified_expression = population_difference - pool_difference + np.log(np.divide(sigma,sigma_hat))
     # this should be a matrix over all victims for each of their miRNAs j
 
     # population = np.array(population)
